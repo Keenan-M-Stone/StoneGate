@@ -1,7 +1,13 @@
 import React from "react";
 import { CircuitEditor } from "./components/CircuitEditor";
 
-const App: React.FC = () => <CircuitEditor />;
+function App() {
+  return (
+    <div className="h-screen">
+      <CircuitEditor />
+    </div>
+  );
+}
 
 export default App;
 
