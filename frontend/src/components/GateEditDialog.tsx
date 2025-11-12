@@ -15,38 +15,25 @@ interface GateEditDialogProps {
 
 /******* Helpers *******/
 
-// Lightweight parser for simple complex expressions
-function parseComplex(expr: string): ComplexNumber | null {
+// Helper to safely parse complex expressions like "1 + 2i" or "exp(i*pi/3)"
+const parseComplexInput = (input: string): { re: number; im: number } => {
   try {
-    const cleaned = expr
-      .toLowerCase()
-      .replace(/\s+/g, "")
-      .replace(/π/g, "pi")
-      .replace(/([0-9])i/g, "$1*i")
-      .replace(/\^/g, "**");
-
-    const pi = Math.PI;
-    const e = Math.E;
-    const i = { re: 0, im: 1 };
-
-    const val = Function("pi", "e", "i", `
-      const mul=(a,b)=>({re:a.re*b.re - a.im*b.im, im:a.re*b.im + a.im*b.re});
-      const add=(a,b)=>({re:a.re+b.re, im:a.im+b.im});
-      const sub=(a,b)=>({re:a.re-b.re, im:a.im-b.im});
-      const expf=(x)=>({re:Math.cos(x.im)*Math.exp(x.re), im:Math.sin(x.im)*Math.exp(x.re)});
-      const toC=(x)=> typeof x==='number'?{re:x,im:0}:x;
-      with (Math) {
-        return ${cleaned};
-      }
-    `)(pi, e, i);
-
-    if (typeof val === "number") return { re: val, im: 0 };
-    if (val && typeof val.re === "number" && typeof val.im === "number") return val;
-    return null;
+    // math.js can interpret `i`, `pi`, `exp`, etc.
+    const value = math.complex(input.replace(/\s+/g, ""));
+    return { re: value.re, im: value.im };
   } catch {
-    return null;
+    // fallback if invalid input
+    return { re: 0, im: 0 };
   }
-}
+};
+
+// Helper for converting matrix cells back to readable strings
+const formatComplex = (c: { re: number; im: number }) => {
+  if (c.im === 0) return `${c.re}`;
+  if (c.re === 0) return `${c.im}i`;
+  const sign = c.im >= 0 ? "+" : "-";
+  return `${c.re} ${sign} ${Math.abs(c.im)}i`;
+};
 
 /******* Component *******/
 export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, onCancel }) => {
@@ -62,15 +49,22 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
   const [matrix, setMatrix] = useState<ComplexNumber[][]>([]);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (editingGate) {
-      setName(editingGate.name);
-      setSymbol(editingGate.symbol);
-      const dim = 2 ** editingGate.qbits.length;
+useEffect(() => {
+  if (editingGate) {
+    setName(editingGate.name);
+    setSymbol(editingGate.symbol);
+    setNumQubits(editingGate.qbits.length);
+    const dim = 2 ** editingGate.qbits.length;
+
+    if (editingGate.type === "atomic") {
       setMatrix(editingGate.matrix || generateIdentity(dim));
-      setNumQubits(editingGate.qbits.length);
+    } else {
+      // For composite gates, just fill an identity for now
+      setMatrix(generateIdentity(dim));
     }
-  }, [editingGate]);
+  }
+}, [editingGate]);
+
 
   const generateIdentity = (dim: number): ComplexNumber[][] =>
     Array.from({ length: dim }, (_, r) =>
@@ -87,7 +81,7 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
   };
 
   const handleChangeMatrix = (r: number, c: number, expr: string) => {
-    const parsed = parseComplex(expr);
+    const parsed = parseComplexInput(expr);
     setMatrix((m) => {
       const copy = m.map((row) => row.map((cell) => ({ ...cell })));
       if (parsed) {
@@ -102,13 +96,22 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
 
   const handleSave = () => {
     if (!editingGate) return;
-    updateGate(editingGate.id, {
-      ...editingGate,
-      name,
-      symbol,
-      qbits: Array.from({ length: numQubits }, (_, i) => i),
-      matrix,
-    });
+
+    if (editingGate.type === "atomic") {
+      updateGate(editingGate.id, {
+        name,
+        symbol,
+        qbits: Array.from({ length: numQubits }, (_, i) => i),
+        matrix,
+      });
+    } else {
+      updateGate(editingGate.id, {
+        name,
+        symbol,
+        qbits: Array.from({ length: numQubits }, (_, i) => i),
+      });
+    }
+
     setEditingGate(null);
   };
 
@@ -178,9 +181,17 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
                       {row.map((val, c) => (
                         <td key={c} className="p-1 border">
                           <Input
-                            value={`${val.re}${val.im >= 0 ? "+" : ""}${val.im}i`}
-                            onChange={(e) => handleChangeMatrix(r, c, e.target.value)}
-                            className="w-28 text-center"
+                            type="text"
+                            value={formatComplex(val)}
+                            onChange={(e) => {
+                              const parsed = parseComplexInput(e.target.value);
+                              setMatrix((m) => {
+                                const copy = m.map((row) => row.map((cell) => ({ ...cell })));
+                                copy[r][c] = parsed;
+                                return copy;
+                              });
+                            }}
+                            className="w-24 text-center font-mono"
                           />
                         </td>
                       ))}
@@ -189,7 +200,6 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
                 </tbody>
               </table>
             </div>
-            {error && <div className="text-red-500 text-sm mt-1">{error}</div>}
           </div>
 
           <div className="flex gap-2 mt-2">

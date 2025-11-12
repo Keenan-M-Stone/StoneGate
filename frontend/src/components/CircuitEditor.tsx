@@ -2,7 +2,8 @@
 import React, { useCallback } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { wrapDndRef } from "../utils/dndRefHelpers";
-import { useCircuitStore, GateModel, CircuitModel } from "../state/useCircuitStore";
+import { useCircuitStore, GateModel, CircuitModel, CompositeGate, AtomicGate } from "../state/useCircuitStore";
+
 import { GateEditDialog } from "./GateEditDialog"; // make sure this exists
 
 /* Layout constants */
@@ -11,6 +12,9 @@ const COL_WIDTH = 120;
 const ROW_HEIGHT = 80;
 const GATE_W = 72;
 const GATE_H = 40;
+
+// type guard
+const isCompositeGate = (g: GateModel): g is CompositeGate => (g as CompositeGate).type === "composite";
 
 interface DragItem {
   id: string;
@@ -73,22 +77,25 @@ const GateView: React.FC<{
             <button onClick={() => removeGate(gate.id)} title="Delete">
               ✕
             </button>
-            {gate.subCircuit && (
+            {isCompositeGate(gate) && (
               <button
                 onClick={() => {
-                  // Ungroup / expand subCircuit
-                  const subGates = gate.subCircuit!.gates;
-                  subGates.forEach((g) =>
+                  // expand subcircuit: add each gate from subCircuit with remapped qbits
+                  const subGates = gate.subCircuit.gates;
+                  subGates.forEach((g: GateModel) => {
+                    // map sub-gate qbits to parent gate qbits
+                    const mappedQbits = g.qbits.map((q: number) => gate.qbits[q]);
                     useCircuitStore.getState().addGate({
                       ...g,
                       id: crypto.randomUUID(),
-                      column: gate.column,
-                      qbits: g.qbits.map((q) => gate.qbits[q]),
-                    })
-                  );
-                  removeGate(gate.id);
+                      column: gate.column + (g.column ?? 0),
+                      qbits: mappedQbits,
+                    } as GateModel);
+                  });
+                  // remove composite gate after expansion
+                  useCircuitStore.getState().removeGate(gate.id);
                 }}
-                title="Expand SubCircuit"
+                title="Expand"
               >
                 🔽
               </button>
@@ -167,18 +174,28 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
 
   const handleAddGate = () => {
     if (c.numQubits === 0) return;
-    const qbit =
+    const firstSelectedQbit =
       selectedGateIds.length > 0
         ? useCircuitStore.getState().circuit.gates.find((g) => g.id === selectedGateIds[0])?.qbits[0] ?? 0
         : 0;
-    addGate({
+
+    // create a proper atomic gate (1-qubit identity)
+    const newGate: AtomicGate = {
       id: crypto.randomUUID(),
+      type: "atomic",
       name: "Identity",
       symbol: "I",
-      qbits: [qbit],
+      qbits: [firstSelectedQbit],
       column: 0,
-    });
+      matrix: [
+        [{ re: 1, im: 0 }, { re: 0, im: 0 }],
+        [{ re: 0, im: 0 }, { re: 1, im: 0 }],
+      ],
+    };
+
+    addGate(newGate as GateModel);
   };
+
 
   const handleSelectGate = (id: string, multi?: boolean) => {
     const current = useCircuitStore.getState().selectedGateIds;

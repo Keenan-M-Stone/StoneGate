@@ -12,11 +12,11 @@ export interface BaseGate {
   symbol: string;
   column: number;
   qbits: number[];
+  matrix: ComplexNumber[][];
 }
 
 export interface AtomicGate extends BaseGate {
   type: "atomic";
-  matrix: ComplexNumber[][];
 }
 
 export interface CompositeGate extends BaseGate {
@@ -28,9 +28,10 @@ export interface CompositeGate extends BaseGate {
 export type GateModel = AtomicGate | CompositeGate;
 
 export interface CircuitModel {
+  id: string;
+  name: string;
   gates: GateModel[];
   numQubits: number;
-  matrix: ComplexNumber[][]; // composed circuit state
 }
 
 interface CircuitState {
@@ -69,11 +70,26 @@ function generateIdentity(dim: number): ComplexNumber[][] {
   );
 }
 
+/** small helper to create an atomic identity gate for a given qbits length */
+function createIdentityAtomicGate(qbits: number[], column = 0): AtomicGate {
+  const dim = 2 ** qbits.length;
+  return {
+    id: crypto.randomUUID(),
+    type: "atomic",
+    name: "Identity",
+    symbol: "I",
+    column,
+    qbits,
+    matrix: generateIdentity(dim),
+  };
+}
+
 export const useCircuitStore = create<CircuitState>((set, get) => ({
   circuit: {
+    id: "root",
+    name: "root",
     gates: [],
     numQubits: 2,
-    matrix: generateIdentity(1),
   },
   selectedGateIds: [],
   editingGate: null,
@@ -88,19 +104,20 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       circuit: { ...s.circuit, gates: s.circuit.gates.filter((g) => g.id !== id) },
     })),
 
-updateGate: (id, updates) =>
-  set((s) => {
-    const updatedGates = s.circuit.gates.map((g) => {
-      if (g.id !== id) return g;
-      return { ...(g as any), ...(updates as Partial<typeof g>) };
-    });
-    return {
-      circuit: {
-        ...s.circuit,
-        gates: updatedGates,
-      },
-    };
-  }),
+  updateGate: (id, updates) =>
+    set((s) => {
+      const updatedGates = s.circuit.gates.map((g) => {
+        if (g.id !== id) return g;
+        // apply updates; cast to GateModel because TS can't easily narrow here
+        return ({ ...(g as any), ...(updates as Partial<typeof g>) } as GateModel);
+      });
+      return {
+        circuit: {
+          ...s.circuit,
+          gates: updatedGates,
+        },
+      };
+    }),
 
   duplicateGate: (id) =>
     set((s) => {
@@ -159,22 +176,27 @@ updateGate: (id, updates) =>
         new Set(selected.flatMap((g) => g.qbits))
       ).sort((a, b) => a - b);
 
-      // Create the subcircuit
+      // Create the subcircuit object (id & name must be strings)
       const subCircuit: CircuitModel = {
-        gates: selected,
+        id: crypto.randomUUID(),
+        name: `subcircuit-${Date.now()}`,
+        gates: selected.map((g) => ({ ...g } as GateModel)),
         numQubits: involvedQubits.length,
-        matrix: generateIdentity(2 ** involvedQubits.length),
       };
+
+      // Composite gate needs a matrix (we use identity placeholder — you can optionally compute reduction)
+      const compositeMatrix = generateIdentity(2 ** involvedQubits.length);
 
       const compositeGate: CompositeGate = {
         id: crypto.randomUUID(),
         type: "composite",
-        name: "Grouped",
+        name: `Group ${Date.now()}`,
         symbol: "G",
         column: minColumn,
         qbits: involvedQubits,
+        matrix: compositeMatrix,
         subCircuit,
-        qubitMapping: involvedQubits,
+        qubitMapping: involvedQubits.slice(),
       };
 
       return {
@@ -196,14 +218,13 @@ updateGate: (id, updates) =>
       const remaining = s.circuit.gates.filter((g) => g.id !== id);
 
       // Map subcircuit gates to parent qubits
-      const expanded = target.subCircuit.gates.map((g) => ({
-        ...g,
-        id: crypto.randomUUID(),
-        column: target.column + g.column,
-        qbits: g.qbits.map(
-          (q, i) => target.qubitMapping?.[i] ?? target.qbits[i] ?? q
-        ),
-      }));
+      const expanded: GateModel[] = target.subCircuit.gates.map((g) => {
+        const mappedQbits = g.qbits.map((q) => {
+          // map subcircuit q index -> parent qbit using qubitMapping if present
+          return target.qubitMapping?.[q] ?? target.qbits[q] ?? q;
+        });
+        return { ...(g as any), id: crypto.randomUUID(), column: target.column + (g.column ?? 0), qbits: mappedQbits } as GateModel;
+      });
 
       return {
         circuit: { ...s.circuit, gates: [...remaining, ...expanded] },
