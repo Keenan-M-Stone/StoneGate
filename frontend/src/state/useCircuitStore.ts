@@ -104,20 +104,15 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
       circuit: { ...s.circuit, gates: s.circuit.gates.filter((g) => g.id !== id) },
     })),
 
-  updateGate: (id, updates) =>
-    set((s) => {
-      const updatedGates = s.circuit.gates.map((g) => {
-        if (g.id !== id) return g;
-        // apply updates; cast to GateModel because TS can't easily narrow here
-        return ({ ...(g as any), ...(updates as Partial<typeof g>) } as GateModel);
-      });
-      return {
-        circuit: {
-          ...s.circuit,
-          gates: updatedGates,
-        },
-      };
-    }),
+updateGate: (id, updates) =>
+  set((s) => {
+    const updatedGates = s.circuit.gates.map((g) => {
+      if (g.id !== id) return g;
+      const updated = { ...(g as any), ...(updates as Partial<typeof g>) } as GateModel;
+      return JSON.stringify(g) === JSON.stringify(updated) ? g : updated;
+    });
+    return { circuit: { ...s.circuit, gates: updatedGates } };
+  }),
 
   duplicateGate: (id) =>
     set((s) => {
