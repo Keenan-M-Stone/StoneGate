@@ -35,6 +35,7 @@ const GateView: React.FC<{
   const removeGate = useCircuitStore((s) => s.removeGate);
   const duplicateGate = useCircuitStore((s) => s.duplicateGate);
   const selectedGateIds = useCircuitStore((s) => s.selectedGateIds);
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
 
   const [{ isDragging }, dragRef] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: DND_ITEM_TYPES.GATE,
@@ -48,10 +49,23 @@ const GateView: React.FC<{
 
   const refHandler = useCallback((node: HTMLDivElement | null) => wrapDndRef(node, dragRef), [dragRef]);
 
+  const isComposite = gate.type === "composite";
+
+  // Determine height & position for composite bars
+  const bundleHeight = isComposite ? gate.qbits.length * ROW_HEIGHT - 8 : GATE_H;
+
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!selected) onSelect(gate.id);
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
   return (
     <div
       ref={refHandler}
       onClick={(e) => onSelect(gate.id, e.ctrlKey)}
+      onContextMenu={handleContextMenu}
       style={{
         display: "inline-block",
         padding: "6px 10px",
@@ -62,9 +76,26 @@ const GateView: React.FC<{
         opacity: isDragging ? 0.5 : 1,
         cursor: "grab",
         userSelect: "none",
+        position: "relative",
+        height: bundleHeight,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {isComposite && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(147, 51, 234, 0.2)",
+            borderRadius: 6,
+            pointerEvents: "none", // let clicks go through to the div
+          }}
+        />
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", zIndex: 1 }}>
         <span>{gate.symbol}</span>
         {selected && (
           <div style={{ display: "flex", gap: 4 }}>
@@ -77,14 +108,12 @@ const GateView: React.FC<{
             <button onClick={() => removeGate(gate.id)} title="Delete">
               ✕
             </button>
-            {isCompositeGate(gate) && (
+            {isComposite && (
               <button
                 onClick={() => {
-                  // expand subcircuit: add each gate from subCircuit with remapped qbits
-                  const subGates = gate.subCircuit.gates;
-                  subGates.forEach((g: GateModel) => {
-                    // map sub-gate qbits to parent gate qbits
-                    const mappedQbits = g.qbits.map((q: number) => gate.qbits[q]);
+                  const subGates = (gate as CompositeGate).subCircuit.gates;
+                  subGates.forEach((g) => {
+                    const mappedQbits = g.qbits.map((q) => gate.qbits[q]);
                     useCircuitStore.getState().addGate({
                       ...g,
                       id: crypto.randomUUID(),
@@ -92,7 +121,6 @@ const GateView: React.FC<{
                       qbits: mappedQbits,
                     } as GateModel);
                   });
-                  // remove composite gate after expansion
                   useCircuitStore.getState().removeGate(gate.id);
                 }}
                 title="Expand"
@@ -106,6 +134,7 @@ const GateView: React.FC<{
     </div>
   );
 };
+
 
 const QubitLine: React.FC<{
   index: number;
@@ -242,6 +271,7 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
       {editingGate && (
         <GateEditDialog
           gate={editingGate}
+          totalQubits={c.numQubits}
           onSave={(g) => {
             useCircuitStore.getState().updateGate(g.id, g);
             setEditingGate(null);

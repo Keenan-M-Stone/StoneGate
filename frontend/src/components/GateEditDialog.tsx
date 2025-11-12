@@ -1,3 +1,4 @@
+// src/components/GateEditDialog.tsx
 import React, { useRef, useState, useEffect } from "react";
 import {
   Dialog,
@@ -16,7 +17,12 @@ import {
 } from "./ui/select";
 import { Alert, AlertDescription } from "./ui/alert";
 import * as math from "mathjs";
-import { useCircuitStore, GateModel, ComplexNumber } from "../state/useCircuitStore";
+import {
+  useCircuitStore,
+  GateModel,
+  ComplexNumber,
+  CompositeGate,
+} from "../state/useCircuitStore";
 
 /********* Helpers *********/
 
@@ -143,27 +149,16 @@ const basicGates: Record<
 
 export const GateEditDialog: React.FC<{
   gate: GateModel;
+  totalQubits: number; // pass from CircuitEditor
   onSave: (gate: GateModel) => void;
   onCancel: () => void;
-}> = ({ gate, onSave, onCancel }) => {
-  // use separate selectors to avoid creating a new object on every store update
+}> = ({ gate, totalQubits, onSave, onCancel }) => {
   const editingGate = useCircuitStore((s) => s.editingGate);
   const setEditingGate = useCircuitStore((s) => s.setEditingGate);
   const updateGate = useCircuitStore((s) => s.updateGate);
 
-  /** small ref to skip the first onOpenChange invocation that Radix sometimes fires on mount */
   const skipFirstOnOpenChange = useRef(false);
-
-  /** Local state to control Dialog open status (kept minimal — we still control via editingGate) */
   const [open, setOpen] = useState<boolean>(!!editingGate);
-
-  /** Synchronize local open state with editingGate */
-  useEffect(() => {
-    // when editingGate becomes set, ensure Dialog open is true
-    setOpen(!!editingGate);
-    // set flag so the immediate onOpenChange call (if it happens) is ignored once
-    skipFirstOnOpenChange.current = !!editingGate;
-  }, [editingGate?.id]);
 
   /** Gate editor state */
   const [name, setName] = useState(gate.name);
@@ -173,24 +168,36 @@ export const GateEditDialog: React.FC<{
   const [selectedGate, setSelectedGate] = useState<string>("custom");
   const [error, setError] = useState<string | null>(null);
   const [invalidCells, setInvalidCells] = useState<Set<string>>(new Set());
+  const [rawInputs, setRawInputs] = useState<Record<string, string>>({});
 
-  /** Reinitialize local state when editingGate changes (once per new gate) */
+  /** Only for CompositeGate: mapping subcircuit qubits to parent circuit */
+  const [qubitMapping, setQubitMapping] = useState<number[]>(
+    gate.type === "composite"
+      ? (gate.qubitMapping?.slice() ?? gate.qbits.slice())
+      : []
+  );
+
+  /** Sync state when editingGate changes */
   useEffect(() => {
     if (!editingGate) return;
 
     setName(editingGate.name);
     setSymbol(editingGate.symbol);
     setNumQubits(editingGate.qbits.length);
-
-    // Only set matrix if the reference has changed
     setMatrix(
-      (prev) =>
-        prev === editingGate.matrix
-          ? prev
-          : editingGate.matrix || generateIdentity(2 ** editingGate.qbits.length)
+      editingGate.matrix || generateIdentity(2 ** editingGate.qbits.length)
     );
-  }, [editingGate?.id]); // depend only on gate identity, not object reference
+    setRawInputs({});
 
+    setQubitMapping(
+      editingGate.type === "composite"
+        ? (editingGate as CompositeGate).qubitMapping?.slice() ??
+          editingGate.qbits.slice()
+        : []
+    );
+  }, [editingGate?.id]);
+
+  /** Matrix validation */
   const validateMatrix = (m: ComplexNumber[][]) => {
     const bad = new Set<string>();
     m.forEach((row, r) =>
@@ -202,7 +209,9 @@ export const GateEditDialog: React.FC<{
     setError(bad.size > 0 ? "Some entries contain invalid complex expressions." : null);
   };
 
-  const handleChangeMatrix = (r: number, c: number, expr: string) => {
+  /** Handle blur (defer validation until focus leaves) */
+  const handleBlurMatrix = (r: number, c: number) => {
+    const expr = rawInputs[`${r}-${c}`];
     const parsed = parseComplexInput(expr);
     setMatrix((m) => {
       const copy = m.map((row) => row.map((cell) => ({ ...cell })));
@@ -210,6 +219,10 @@ export const GateEditDialog: React.FC<{
       validateMatrix(copy);
       return copy;
     });
+  };
+
+  const handleChangeMatrix = (r: number, c: number, val: string) => {
+    setRawInputs((prev) => ({ ...prev, [`${r}-${c}`]: val }));
   };
 
   const handlePreset = (key: string) => {
@@ -230,15 +243,22 @@ export const GateEditDialog: React.FC<{
       return;
     }
     if (!editingGate) return;
-    const updatedGate = {
+
+    const updatedGate: GateModel = {
       ...editingGate,
       name,
       symbol,
-      qbits: Array.from({ length: numQubits }, (_, i) => i),
+      qbits:
+        editingGate.type === "composite"
+          ? qubitMapping.slice()
+          : editingGate.qbits.slice(),
       matrix,
+      ...(editingGate.type === "composite" ? { qubitMapping: qubitMapping.slice() } : {}),
     };
+
     updateGate(editingGate.id, updatedGate);
     setEditingGate(null);
+    onSave(updatedGate);
   };
 
   if (!editingGate) return null;
@@ -247,16 +267,12 @@ export const GateEditDialog: React.FC<{
     <Dialog
       open={!!editingGate && open}
       onOpenChange={(isOpen) => {
-        // If we set skipFirstOnOpenChange, ignore the first Radix callback that happens on mount
         if (skipFirstOnOpenChange.current) {
-          // clear the flag and do not treat this as a user-close event
           skipFirstOnOpenChange.current = false;
           setOpen(isOpen);
           return;
         }
-
         setOpen(isOpen);
-        // only clear the editingGate when dialog is closed by user interaction
         if (!isOpen) setEditingGate(null);
       }}
     >
@@ -266,19 +282,19 @@ export const GateEditDialog: React.FC<{
         </DialogHeader>
 
         {error && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mb-2">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {/* Basic Fields */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <Input placeholder="Symbol" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
         </div>
 
         {/* Preset Selector */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mb-2">
           <span className="text-sm font-medium">Load Preset:</span>
           <Select onValueChange={handlePreset} value={selectedGate}>
             <SelectTrigger className="w-48">
@@ -296,13 +312,50 @@ export const GateEditDialog: React.FC<{
         </div>
 
         {/* Qubit Count */}
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1 mb-2">
           <span className="text-sm font-medium">Number of Qubits</span>
-          <Input type="number" value={numQubits} min={1} max={4} onChange={(e) => setNumQubits(parseInt(e.target.value))} />
+          <Input
+            type="number"
+            value={numQubits}
+            min={1}
+            max={totalQubits}
+            disabled={editingGate.type === "composite"} // composite gates cannot change qubit count
+            onChange={(e) => setNumQubits(parseInt(e.target.value))}
+          />
         </label>
 
+        {/* Qubit Mapping (CompositeGate only) */}
+        {editingGate.type === "composite" && (
+          <div className="mb-2">
+            <h3 className="font-semibold mb-1">Qubit Mapping</h3>
+            {qubitMapping.map((q, i) => (
+              <div key={i} className="flex items-center gap-2 mb-1">
+                <label className="text-sm">{`Input ${i}:`}</label>
+                <select
+                  value={q}
+                  onChange={(e) => {
+                    const newQ = parseInt(e.target.value);
+                    setQubitMapping((prev) => {
+                      const copy = [...prev];
+                      copy[i] = newQ;
+                      return copy;
+                    });
+                  }}
+                  className="border rounded px-1 py-0.5 text-sm"
+                >
+                  {[...Array(totalQubits)].map((_, qi) => (
+                    <option key={qi} value={qi}>
+                      q[{qi}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Matrix Editor */}
-        <div>
+        <div className="mb-2">
           <span className="text-sm font-medium">Matrix Editor</span>
           <div className="overflow-auto mt-2 border rounded-md p-2">
             <table className="border-collapse">
@@ -316,9 +369,18 @@ export const GateEditDialog: React.FC<{
                         <td key={c} className="p-1 border">
                           <Input
                             type="text"
-                            value={formatComplex(val)}
-                            onChange={(e) => handleChangeMatrix(r, c, e.target.value)}
-                            className={`w-24 text-center font-mono ${invalid ? "border-red-500 bg-red-50" : ""}`}
+                            value={
+                              key in rawInputs
+                                ? rawInputs[key]
+                                : formatComplex(val)
+                            }
+                            onChange={(e) =>
+                              handleChangeMatrix(r, c, e.target.value)
+                            }
+                            onBlur={() => handleBlurMatrix(r, c)}
+                            className={`w-24 text-center font-mono ${
+                              invalid ? "border-red-500 bg-red-50" : ""
+                            }`}
                           />
                         </td>
                       );
@@ -331,13 +393,11 @@ export const GateEditDialog: React.FC<{
         </div>
 
         {/* Magnitude Preview */}
-        <div>
+        <div className="mb-2">
           <span className="text-sm font-medium">Magnitude Preview</span>
           <div
             className="grid mt-2"
-            style={{
-              gridTemplateColumns: `repeat(${matrix.length}, 1fr)`,
-            }}
+            style={{ gridTemplateColumns: `repeat(${matrix.length}, 1fr)` }}
           >
             {matrix.flat().map((c, i) => (
               <div
