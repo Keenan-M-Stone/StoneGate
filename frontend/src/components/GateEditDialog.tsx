@@ -1,23 +1,54 @@
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog' //"@/components/ui/dialog";
-import { Input }  from './ui/input'  //"@/components/ui/input";
-import { Button } from './ui/button' //"@/components/ui/button";
-import { useCircuitStore, GateModel } from "../state/useCircuitStore";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
+import { useCircuitStore, GateModel, ComplexNumber } from "../state/useCircuitStore";
 import { parse } from "papaparse";
+import * as math from "mathjs";
 
-/******* Type Defs *******/
+/******* Types *******/
 interface GateEditDialogProps {
   gate: GateModel;
   onSave: (gate: GateModel) => void;
   onCancel: () => void;
 }
 
-interface ComplexNumber {
-  re: number;
-  im: number;
+/******* Helpers *******/
+
+// Lightweight parser for simple complex expressions
+function parseComplex(expr: string): ComplexNumber | null {
+  try {
+    const cleaned = expr
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/π/g, "pi")
+      .replace(/([0-9])i/g, "$1*i")
+      .replace(/\^/g, "**");
+
+    const pi = Math.PI;
+    const e = Math.E;
+    const i = { re: 0, im: 1 };
+
+    const val = Function("pi", "e", "i", `
+      const mul=(a,b)=>({re:a.re*b.re - a.im*b.im, im:a.re*b.im + a.im*b.re});
+      const add=(a,b)=>({re:a.re+b.re, im:a.im+b.im});
+      const sub=(a,b)=>({re:a.re-b.re, im:a.im-b.im});
+      const expf=(x)=>({re:Math.cos(x.im)*Math.exp(x.re), im:Math.sin(x.im)*Math.exp(x.re)});
+      const toC=(x)=> typeof x==='number'?{re:x,im:0}:x;
+      with (Math) {
+        return ${cleaned};
+      }
+    `)(pi, e, i);
+
+    if (typeof val === "number") return { re: val, im: 0 };
+    if (val && typeof val.re === "number" && typeof val.im === "number") return val;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
-/******* Dialogs *******/
+/******* Component *******/
 export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, onCancel }) => {
   const editingGate = useCircuitStore((s) => s.editingGate);
   const setEditingGate = useCircuitStore((s) => s.setEditingGate);
@@ -27,12 +58,59 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
 
   const [name, setName] = useState(gate.name);
   const [symbol, setSymbol] = useState(gate.symbol);
-  const [qbits, setQbits] = useState<number[]>([...gate.qbits]);
-  const [numQubits, setNumQubits] = useState(1);
-  const [matrix, setMatrix] = useState<ComplexNumber[][]>([
-    [{ re: 1, im: 0 }, { re: 0, im: 0 }],
-    [{ re: 0, im: 0 }, { re: 1, im: 0 }],
-  ]);
+  const [numQubits, setNumQubits] = useState(gate.qbits.length);
+  const [matrix, setMatrix] = useState<ComplexNumber[][]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (editingGate) {
+      setName(editingGate.name);
+      setSymbol(editingGate.symbol);
+      const dim = 2 ** editingGate.qbits.length;
+      setMatrix(editingGate.matrix || generateIdentity(dim));
+      setNumQubits(editingGate.qbits.length);
+    }
+  }, [editingGate]);
+
+  const generateIdentity = (dim: number): ComplexNumber[][] =>
+    Array.from({ length: dim }, (_, r) =>
+      Array.from({ length: dim }, (_, c) => ({
+        re: r === c ? 1 : 0,
+        im: 0,
+      }))
+    );
+
+  const handleNumQubitsChange = (val: number) => {
+    const newNum = Math.max(1, Math.min(4, val));
+    setNumQubits(newNum);
+    setMatrix(generateIdentity(2 ** newNum));
+  };
+
+  const handleChangeMatrix = (r: number, c: number, expr: string) => {
+    const parsed = parseComplex(expr);
+    setMatrix((m) => {
+      const copy = m.map((row) => row.map((cell) => ({ ...cell })));
+      if (parsed) {
+        copy[r][c] = parsed;
+        setError("");
+      } else {
+        setError(`Invalid complex value at [${r},${c}]`);
+      }
+      return copy;
+    });
+  };
+
+  const handleSave = () => {
+    if (!editingGate) return;
+    updateGate(editingGate.id, {
+      ...editingGate,
+      name,
+      symbol,
+      qbits: Array.from({ length: numQubits }, (_, i) => i),
+      matrix,
+    });
+    setEditingGate(null);
+  };
 
   const handleExportJSON = () => {
     const blob = new Blob([JSON.stringify(matrix, null, 2)], { type: "application/json" });
@@ -57,60 +135,6 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
       const newMatrix = parsed.map((row) => row.map((val) => ({ re: val, im: 0 })));
       setMatrix(newMatrix);
     });
-  };
-
-  // Load gate values when editingGate changes
-  useEffect(() => {
-    if (editingGate) {
-      setName(editingGate.name);
-      setSymbol(editingGate.symbol);
-      setNumQubits(editingGate.qbits.length);
-      const dim = 2 ** editingGate.qbits.length;
-      setMatrix(generateIdentity(dim));
-    }
-  }, [editingGate]);
-
-
-  const handleSave = () => {
-    onSave({ ...gate, name, symbol, qbits });
-  };
-
-  /*
-  const handleSave = () => {
-    if (!editingGate) return;
-    updateGate(editingGate.id, {
-      name,
-      symbol,
-      qbits: Array.from({ length: numQubits }, (_, i) => i),
-      // You might later replace this with a proper complex matrix, for now just identity.
-    });
-    setEditingGate(null);
-  };
-  */
-
-  const handleCancel = () => setEditingGate(null);
-
-  const handleChangeMatrix = (r: number, c: number, field: "re" | "im", val: number) => {
-    setMatrix((m) => {
-      const copy = m.map((row) => row.map((cell) => ({ ...cell })));
-      copy[r][c][field] = val;
-      return copy;
-    });
-  };
-
-  const generateIdentity = (dim: number): ComplexNumber[][] =>
-    Array.from({ length: dim }, (_, r) =>
-      Array.from({ length: dim }, (_, c) => ({
-        re: r === c ? 1 : 0,
-        im: 0,
-      }))
-    );
-
-  const handleNumQubitsChange = (val: number) => {
-    const newNum = Math.max(1, Math.min(4, val)); // Limit to 4 for practicality
-    setNumQubits(newNum);
-    const dim = 2 ** newNum;
-    setMatrix(generateIdentity(dim));
   };
 
   if (!editingGate) return null;
@@ -153,20 +177,11 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
                     <tr key={r}>
                       {row.map((val, c) => (
                         <td key={c} className="p-1 border">
-                          <div className="flex gap-1">
-                            <Input
-                              type="number"
-                              value={val.re}
-                              onChange={(e) => handleChangeMatrix(r, c, "re", parseFloat(e.target.value) || 0)}
-                              className="w-12 text-center"
-                            />
-                            <Input
-                              type="number"
-                              value={val.im}
-                              onChange={(e) => handleChangeMatrix(r, c, "im", parseFloat(e.target.value) || 0)}
-                              className="w-12 text-center"
-                            />
-                          </div>
+                          <Input
+                            value={`${val.re}${val.im >= 0 ? "+" : ""}${val.im}i`}
+                            onChange={(e) => handleChangeMatrix(r, c, e.target.value)}
+                            className="w-28 text-center"
+                          />
                         </td>
                       ))}
                     </tr>
@@ -174,10 +189,13 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
                 </tbody>
               </table>
             </div>
+            {error && <div className="text-red-500 text-sm mt-1">{error}</div>}
           </div>
 
           <div className="flex gap-2 mt-2">
-            <Button variant="outline" onClick={handleExportJSON}>Export JSON</Button>
+            <Button variant="outline" onClick={handleExportJSON}>
+              Export JSON
+            </Button>
             <label className="cursor-pointer">
               <span className="px-2 py-1 bg-gray-100 rounded-md">Import JSON</span>
               <input type="file" accept=".json" className="hidden" onChange={handleImportJSON} />
@@ -205,7 +223,7 @@ export const GateEditDialog: React.FC<GateEditDialogProps> = ({ gate, onSave, on
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={handleCancel}>
+            <Button variant="outline" onClick={() => setEditingGate(null)}>
               Cancel
             </Button>
             <Button onClick={handleSave}>Save</Button>
