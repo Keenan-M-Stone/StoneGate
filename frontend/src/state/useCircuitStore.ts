@@ -10,6 +10,7 @@ export interface BaseGate {
   id: string;
   name: string;
   symbol: string;
+  color?: string;
   column: number;
   qbits: number[];
   matrix: ComplexNumber[][];
@@ -34,9 +35,18 @@ export interface CircuitModel {
   numQubits: number;
 }
 
+export interface QubitBundle {
+  id: string;
+  name: string;
+  qbits: number[]; // indices in parent circuit
+  color?: string;
+}
+
 interface CircuitState {
   circuit: CircuitModel;
   selectedGateIds: string[];
+  selectedQubits: number[];
+  bundles: QubitBundle[];
   editingGate?: GateModel | null;
 
   // Basic ops
@@ -51,6 +61,13 @@ interface CircuitState {
   // Circuit-level ops
   addQubit: () => void;
   removeQubit: () => void;
+
+  // Qubit Bundle Ops
+  setSelectedQubits: (ids: number[]) => void;
+  toggleSelectQubit: (q: number, multi?: boolean) => void;
+  clearSelectedQubits: () => void;
+  createQubitBundle: (name: string, qbits: number[], color?: string) => void;
+  removeQubitBundle: (id: string) => void;
 
   // Grouping / ungrouping
   groupSelectedGates: () => void;
@@ -92,6 +109,8 @@ export const useCircuitStore = create<CircuitState>((set, get) => ({
     numQubits: 2,
   },
   selectedGateIds: [],
+  selectedQubits: [],
+  bundles: [],
   editingGate: null,
 
   addGate: (gate) =>
@@ -225,6 +244,35 @@ updateGate: (id, updates) =>
         circuit: { ...s.circuit, gates: [...remaining, ...expanded] },
       };
     }),
+  
+  /***************
+   * Qubits
+   ***************/  
+  setSelectedQubits: (ids) => set({ selectedQubits: ids }),
+  toggleSelectQubit: (q, multi) =>
+    set((s) => {
+      const cur = new Set(s.selectedQubits);
+      if (multi) {
+        if (cur.has(q)) cur.delete(q);
+        else cur.add(q);
+      } else {
+        // replace
+        cur.clear();
+        cur.add(q);
+      }
+      return { selectedQubits: Array.from(cur) };
+    }),
+  
+  clearSelectedQubits: () => set({ selectedQubits: [] }),
+  createQubitBundle: (name, qbits, color) =>
+    set((s) => {
+      const id = crypto.randomUUID();
+      const bundle = { id, name, qbits, color };
+      return { bundles: [...(s.bundles ?? []), bundle] };
+    }),
+  removeQubitBundle: (id) =>
+    set((s) => ({ bundles: (s.bundles ?? []).filter((b) => b.id !== id) })),
+
 
   /***************
    * Persistence

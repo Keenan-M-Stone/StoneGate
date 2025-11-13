@@ -165,6 +165,7 @@ export const GateEditDialog: React.FC<{
   const [symbol, setSymbol] = useState(gate.symbol);
   const [numQubits, setNumQubits] = useState(gate.qbits.length);
   const [matrix, setMatrix] = useState<ComplexNumber[][]>(gate.matrix);
+  const [color, setColor] = useState<string>(gate.color || "#2563eb");
   const [selectedGate, setSelectedGate] = useState<string>("custom");
   const [error, setError] = useState<string | null>(null);
   const [invalidCells, setInvalidCells] = useState<Set<string>>(new Set());
@@ -248,6 +249,7 @@ export const GateEditDialog: React.FC<{
       ...editingGate,
       name,
       symbol,
+      color,
       qbits:
         editingGate.type === "composite"
           ? qubitMapping.slice()
@@ -292,6 +294,12 @@ export const GateEditDialog: React.FC<{
           <Input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <Input placeholder="Symbol" value={symbol} onChange={(e) => setSymbol(e.target.value)} />
         </div>
+
+        {/* color picker */}
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-medium">Color</span>
+          <input type="color" value={color} onChange={(e) => setColor(e.target.value)} />
+        </label>
 
         {/* Preset Selector */}
         <div className="flex items-center gap-2 mb-2">
