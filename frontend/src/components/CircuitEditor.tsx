@@ -2,7 +2,13 @@
 import React, { useCallback } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { wrapDndRef } from "../utils/dndRefHelpers";
-import { useCircuitStore, GateModel, CircuitModel, CompositeGate, AtomicGate } from "../state/useCircuitStore";
+import {
+  useCircuitStore,
+  GateModel,
+  CircuitModel,
+  CompositeGate,
+  AtomicGate,
+} from "../state/useCircuitStore";
 
 import { GateEditDialog } from "./GateEditDialog"; // make sure this exists
 
@@ -26,6 +32,8 @@ const DND_ITEM_TYPES = {
   GATE: "GATE",
 } as const;
 
+/* ---------------- GateView ---------------- */
+
 const GateView: React.FC<{
   gate: GateModel;
   selected: boolean;
@@ -35,7 +43,6 @@ const GateView: React.FC<{
   const removeGate = useCircuitStore((s) => s.removeGate);
   const duplicateGate = useCircuitStore((s) => s.duplicateGate);
   const selectedGateIds = useCircuitStore((s) => s.selectedGateIds);
-  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number } | null>(null);
 
   const [{ isDragging }, dragRef] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: DND_ITEM_TYPES.GATE,
@@ -49,29 +56,28 @@ const GateView: React.FC<{
 
   const refHandler = useCallback((node: HTMLDivElement | null) => wrapDndRef(node, dragRef), [dragRef]);
 
-  const isComposite = gate.type === "composite";
-
-  // Determine height & position for composite bars
-  const bundleHeight = isComposite ? gate.qbits.length * ROW_HEIGHT - 8 : GATE_H;
-
+  const isComposite = (gate as any).type === "composite";
+  // composite visual height if we want it to overlap multiple rows
+  const bundleHeight = isComposite ? (gate.qbits.length * ROW_HEIGHT - 8) : GATE_H;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!selected) onSelect(gate.id);
-    setContextMenu({ x: e.clientX, y: e.clientY });
+    // use shared global function to open menu (keeps menu central)
+    (window as any).__openContextAt?.(e, "gate", gate.id);
   };
 
   return (
     <div
       ref={refHandler}
-      onClick={(e) => onSelect(gate.id, e.ctrlKey)}
+      onClick={(e) => { e.stopPropagation(); onSelect(gate.id, e.ctrlKey || e.metaKey); }}
       onContextMenu={handleContextMenu}
       style={{
         display: "inline-block",
         padding: "6px 10px",
         margin: "4px",
         borderRadius: 6,
-        background: selected ? "#9333ea" : "#2563eb",
+        background: selected ? "#9333ea" : (gate as any).color ?? "#2563eb",
         color: "white",
         opacity: isDragging ? 0.5 : 1,
         cursor: "grab",
@@ -88,36 +94,33 @@ const GateView: React.FC<{
             left: 0,
             width: "100%",
             height: "100%",
-            background: "rgba(147, 51, 234, 0.2)",
+            background: "rgba(147, 51, 234, 0.12)",
             borderRadius: 6,
-            pointerEvents: "none", // let clicks go through to the div
+            pointerEvents: "none",
           }}
         />
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", zIndex: 1 }}>
-        <span>{gate.symbol}</span>
+        <span style={{ fontWeight: 700 }}>{gate.symbol || gate.name}</span>
         {selected && (
-          <div style={{ display: "flex", gap: 4 }}>
-            <button onClick={() => onEdit(gate)} title="Edit">
-              ✎
-            </button>
-            <button onClick={() => duplicateGate(gate.id)} title="Duplicate">
-              ⧉
-            </button>
-            <button onClick={() => removeGate(gate.id)} title="Delete">
-              ✕
-            </button>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={(ev) => { ev.stopPropagation(); onEdit(gate); }} title="Edit">✎</button>
+            <button onClick={(ev) => { ev.stopPropagation(); duplicateGate(gate.id); }} title="Duplicate">⧉</button>
+            <button onClick={(ev) => { ev.stopPropagation(); removeGate(gate.id); }} title="Delete">✕</button>
+
             {isComposite && (
               <button
-                onClick={() => {
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  // expand composite into individual gates (map subcircuit qubit indices to parent)
                   const subGates = (gate as CompositeGate).subCircuit.gates;
                   subGates.forEach((g) => {
                     const mappedQbits = g.qbits.map((q) => gate.qbits[q]);
                     useCircuitStore.getState().addGate({
                       ...g,
                       id: crypto.randomUUID(),
-                      column: gate.column + (g.column ?? 0),
+                      column: (gate.column ?? 0) + (g.column ?? 0),
                       qbits: mappedQbits,
                     } as GateModel);
                   });
@@ -135,6 +138,7 @@ const GateView: React.FC<{
   );
 };
 
+/* ---------------- QubitLine ---------------- */
 
 const QubitLine: React.FC<{
   index: number;
@@ -142,13 +146,16 @@ const QubitLine: React.FC<{
   selectedGateIds: string[];
   onSelectGate: (id: string, multi?: boolean) => void;
   onEditGate: (g: GateModel) => void;
-}> = ({ index, gates, selectedGateIds, onSelectGate, onEditGate }) => {
+  isSelected: boolean;
+  toggleSelectQubit: (i: number, multi?: boolean) => void;
+  openContextAt: (e: React.MouseEvent, kind: "gate" | "qubit", target?: string | number) => void;
+}> = ({ index, gates, selectedGateIds, onSelectGate, onEditGate, isSelected, toggleSelectQubit, openContextAt }) => {
   const moveGatesTo = useCircuitStore((s) => s.moveGatesTo);
 
   const [, dropRef] = useDrop<DragItem, void, any>({
     accept: [DND_ITEM_TYPES.GATE],
     drop: (item) => {
-      // Move all selected gates to this qubit/column
+      // Move all selected gates to this qubit/column (simple: map to this qbit)
       const qbitsForEach: Record<string, number[]> = {};
       item.selectedIds.forEach((id) => (qbitsForEach[id] = [index]));
       moveGatesTo(item.selectedIds, 0, qbitsForEach);
@@ -162,22 +169,21 @@ const QubitLine: React.FC<{
       ref={refHandler}
       onClick={(e) => {
         e.stopPropagation();
-        useCircuitStore.getState().toggleSelectQubit(index, e.ctrlKey || e.metaKey);
+        toggleSelectQubit(index, e.ctrlKey || e.metaKey);
       }}
       onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // open the shared context menu from the parent store
-        const { set } = useCircuitStore as any; // type silence
-        // safer: lift openContextAt to a separate exported util, or pass via prop
-        (window as any).__openContextAt?.(e, "qubit", index);
+        e.preventDefault(); e.stopPropagation();
+        openContextAt(e, "qubit", index);
       }}
       style={{
         display: "flex",
         alignItems: "center",
-        padding: "8px 12px",
+        padding: "6px 12px",
         borderBottom: "1px solid #e5e7eb",
-        minHeight: 48,
+        minHeight: 36,
+        background: isSelected ? "rgba(59,130,246,0.06)" : "transparent",
+        borderLeft: isSelected ? "3px solid #3b82f6" : "3px solid transparent",
+        cursor: "pointer",
       }}
     >
       <div style={{ width: 48, color: "#6b7280", fontFamily: "monospace" }}>{`q[${index}]`}</div>
@@ -198,6 +204,47 @@ const QubitLine: React.FC<{
   );
 };
 
+/* ---------------- QubitBundleLine (compact visual) ---------------- */
+
+const QubitBundleLine: React.FC<{
+  bundle: { id: string; name: string; qbits: number[]; color?: string };
+  isSelected: boolean;
+  openContextAt: (e: React.MouseEvent, kind: "gate" | "qubit", target?: string | number) => void;
+}> = ({ bundle, isSelected, openContextAt }) => {
+  const palette = ["#3b82f6", "#22c55e", "#eab308", "#f97316", "#ec4899", "#8b5cf6"];
+
+  return (
+    <div
+      onContextMenu={(e) => openContextAt(e, "qubit", bundle.id)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        padding: "4px 10px",
+        margin: "4px 0",
+        borderLeft: isSelected ? "3px solid #3b82f6" : "3px solid transparent",
+        background: "rgba(0,0,0,0.02)",
+        borderRadius: 6,
+        fontSize: "0.92rem",
+        cursor: "pointer",
+        minHeight: 28,
+      }}
+    >
+      <div style={{ flex: 1 }}>
+        <span style={{ color: bundle.color ?? "#0ea5e9", fontWeight: 700 }}>|{bundle.name}&gt;</span>{" "}
+        <span style={{ opacity: 0.75, marginLeft: 6 }}>{bundle.qbits.map((q) => `q${q}`).join(", ")}</span>
+      </div>
+
+      <div style={{ display: "flex", gap: 6 }}>
+        {bundle.qbits.map((_, i) => (
+          <div key={i} style={{ width: 14, height: 8, borderRadius: 3, background: palette[i % palette.length] }} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ---------------- Main Editor ---------------- */
+
 export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit }) => {
   const {
     circuit: storeCircuit,
@@ -212,10 +259,12 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
   } = useCircuitStore();
 
   const c = circuit ?? storeCircuit;
+  const bundles = useCircuitStore((s) => s.bundles ?? []);
   const selectedQubits = useCircuitStore((s) => s.selectedQubits);
   const toggleSelectQubit = useCircuitStore((s) => s.toggleSelectQubit);
   const clearSelectedQubits = useCircuitStore((s) => s.clearSelectedQubits);
   const createQubitBundle = useCircuitStore((s) => s.createQubitBundle);
+  const removeQubitBundle = useCircuitStore((s) => s.removeQubitBundle);
   const groupSelectedGates = useCircuitStore((s) => s.groupSelectedGates);
 
   // context menu (shared for gates & qubit rows)
@@ -226,7 +275,7 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
     targetId?: string | number;
   } | null>(null);
 
-  // Expose globally, so QubitLine can access.
+  // Expose globally, so GateView and QubitLine can invoke it
   const openContextAt = (e: React.MouseEvent, kind: "gate" | "qubit", target?: string | number) => {
     e.preventDefault();
     setCtxMenu({ x: e.clientX, y: e.clientY, kind, targetId: target });
@@ -238,7 +287,6 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
   /* Group Qubits */
   const handleCreateBundleFromSelection = () => {
     if (selectedQubits.length < 2) return;
-    // simple name generation
     const name = `Bundle-${Date.now()}`;
     createQubitBundle(name, selectedQubits.slice());
     closeContext();
@@ -252,7 +300,14 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
     closeContext();
   };
 
-  /* Top Banner Callbacks*/
+  /* Unbundle (split) */
+  const handleUnbundle = (bundleId?: string | number) => {
+    if (!bundleId) return;
+    removeQubitBundle(String(bundleId));
+    closeContext();
+  };
+
+  /* Add identity gate (atomic) */
   const handleAddGate = () => {
     if (c.numQubits === 0) return;
     const firstSelectedQbit =
@@ -260,7 +315,6 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
         ? useCircuitStore.getState().circuit.gates.find((g) => g.id === selectedGateIds[0])?.qbits[0] ?? 0
         : 0;
 
-    // create a proper atomic gate (1-qubit identity)
     const newGate: AtomicGate = {
       id: crypto.randomUUID(),
       type: "atomic",
@@ -277,7 +331,6 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
     addGate(newGate as GateModel);
   };
 
-
   const handleSelectGate = (id: string, multi?: boolean) => {
     const current = useCircuitStore.getState().selectedGateIds;
     const newSelection = multi ? [...new Set([...current, id])] : [id];
@@ -286,37 +339,52 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
 
   const handleEditGate = (g: GateModel) => setEditingGate(g);
 
+  /* Render helpers - render either a bundle header or a normal qubit row */
+  const renderQubitOrBundle = (i: number) => {
+    // find bundle whose head is i
+    const headBundle = bundles.find((b) => b.qbits[0] === i);
+    if (headBundle) {
+      return (
+        <QubitBundleLine
+          key={`bundle-${headBundle.id}`}
+          bundle={headBundle}
+          isSelected={headBundle.qbits.some((q) => selectedQubits.includes(q))}
+          openContextAt={openContextAt}
+        />
+      );
+    }
+
+    // skip lines that belong to a bundle but are not the head
+    if (bundles.some((b) => b.qbits.includes(i) && b.qbits[0] !== i)) return null;
+
+    return (
+      <QubitLine
+        key={i}
+        index={i}
+        gates={c.gates}
+        selectedGateIds={selectedGateIds}
+        onSelectGate={handleSelectGate}
+        onEditGate={handleEditGate}
+        isSelected={selectedQubits.includes(i)}
+        toggleSelectQubit={toggleSelectQubit}
+        openContextAt={openContextAt}
+      />
+    );
+  };
+
   return (
     <div className="p-4 bg-gray-50 h-full">
       <div className="flex gap-2 mb-4">
-        <button onClick={handleAddGate} className="bg-blue-500 text-white px-2 py-1 rounded">
-          Add Identity
-        </button>
-        <button onClick={addQubit} className="bg-green-500 text-white px-2 py-1 rounded">
-          Add Qubit
-        </button>
-        <button onClick={removeQubit} className="bg-yellow-500 text-white px-2 py-1 rounded">
-          Remove Qubit
-        </button>
-        <button onClick={saveCircuit} className="bg-indigo-500 text-white px-2 py-1 rounded">
-          Save
-        </button>
-        <button onClick={loadCircuit} className="bg-purple-500 text-white px-2 py-1 rounded">
-          Load
-        </button>
+        <button onClick={handleAddGate} className="bg-blue-500 text-white px-2 py-1 rounded">Add Identity</button>
+        <button onClick={addQubit} className="bg-green-500 text-white px-2 py-1 rounded">Add Qubit</button>
+        <button onClick={removeQubit} className="bg-yellow-500 text-white px-2 py-1 rounded">Remove Qubit</button>
+        <button onClick={saveCircuit} className="bg-indigo-500 text-white px-2 py-1 rounded">Save</button>
+        <button onClick={loadCircuit} className="bg-purple-500 text-white px-2 py-1 rounded">Load</button>
       </div>
 
+      {/* Qubits / bundles (compact) */}
       <div>
-        {[...Array(c.numQubits)].map((_, i) => (
-          <QubitLine
-            key={i}
-            index={i}
-            gates={c.gates}
-            selectedGateIds={selectedGateIds}
-            onSelectGate={handleSelectGate}
-            onEditGate={handleEditGate}
-          />
-        ))}
+        {Array.from({ length: c.numQubits }).map((_, i) => renderQubitOrBundle(i))}
       </div>
 
       {/* shared context menu */}
@@ -335,43 +403,51 @@ export const CircuitEditor: React.FC<{ circuit?: CircuitModel }> = ({ circuit })
           }}
           onMouseLeave={() => setTimeout(closeContext, 200)}
         >
-          {ctxMenu.kind === "gate" && (
-            <>
-              {selectedGateIds.length > 1 && (
-                <div style={{ padding: 6, cursor: "pointer" }} onClick={handleGroupSelectedGates}>
-                  Group selected gates
-                </div>
-              )}
-              {/* if clicked on a specific gate and it's composite, show ungroup option */}
-              {typeof ctxMenu.targetId === "string" && (() => {
-                const g = c.gates.find((x) => x.id === ctxMenu.targetId);
-                if (g && g.type === "composite") {
-                  return (
-                    <div
-                      style={{ padding: 6, cursor: "pointer" }}
-                      onClick={() => {
-                        useCircuitStore.getState().ungroupCompositeGate(g.id);
-                        closeContext();
-                      }}
-                    >
-                      Expand / Ungroup
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-            </>
+          {/* Group gates */}
+          {ctxMenu.kind === "gate" && selectedGateIds.length > 1 && (
+            <div style={{ padding: 6, cursor: "pointer" }} onClick={handleGroupSelectedGates}>
+              Group selected gates
+            </div>
           )}
 
-          {ctxMenu.kind === "qubit" && (
-            <>
-              {selectedQubits.length > 1 && (
-                <div style={{ padding: 6, cursor: "pointer" }} onClick={handleCreateBundleFromSelection}>
-                  Create bundle from selected qubits
+          {/* Expand/ungroup composite gate (if the target is a composite gate) */}
+          {ctxMenu.kind === "gate" && typeof ctxMenu.targetId === "string" && (() => {
+            const g = c.gates.find((x) => x.id === ctxMenu.targetId);
+            if (g && g.type === "composite") {
+              return (
+                <div
+                  style={{ padding: 6, cursor: "pointer" }}
+                  onClick={() => {
+                    useCircuitStore.getState().ungroupCompositeGate(g.id);
+                    closeContext();
+                  }}
+                >
+                  Expand / Ungroup
                 </div>
-              )}
-            </>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Create bundle from qubit selection */}
+          {ctxMenu.kind === "qubit" && selectedQubits.length > 1 && (
+            <div style={{ padding: 6, cursor: "pointer" }} onClick={handleCreateBundleFromSelection}>
+              Create bundle from selected qubits
+            </div>
           )}
+
+          {/* Unbundle (if right-clicked on a bundle) */}
+          {ctxMenu.kind === "qubit" && typeof ctxMenu.targetId !== "undefined" && (() => {
+            const maybeBundle = bundles.find((b) => b.id === String(ctxMenu.targetId) || b.qbits[0] === Number(ctxMenu.targetId));
+            if (maybeBundle) {
+              return (
+                <div style={{ padding: 6, cursor: "pointer" }} onClick={() => handleUnbundle(maybeBundle.id)}>
+                  Unbundle qubits
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
 
