@@ -43,7 +43,8 @@ export const GateEditDialog: React.FC<{ gate: GateModel; totalQubits: number; on
     setSelectedQbits([... (gate.qbits || [])].slice(0, totalQubits));
     const dim = gate.matrix ? gate.matrix.length : 2 ** Math.max(1, gate.qbits.length || 1);
     setMatrix(gate.matrix ? gate.matrix : generateIdentity(dim));
-    setNumQubits(Math.max(1, (gate.qbits && gate.qbits.length) || 1));
+    const implied = Math.max(1, (gate.qbits && gate.qbits.length) || 1);
+    setNumQubits(implied);
     setError(null);
   }, [gate, totalQubits]);
 
