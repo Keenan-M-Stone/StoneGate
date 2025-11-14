@@ -1,3 +1,8 @@
+/*
+src/backend/diagnostic.cpp
+Contains code intended to perform any device diagnostics that
+can inform the health and reliability of the apparatus.
+*/
 #include "backend/diagnostic.h"
 #include <thread>
 

@@ -1,3 +1,8 @@
+/*
+src/backend/reception.cpp
+Convert script of steps provided by the frontend into sequence of 
+operations to be performed by the device.
+*/
 #include "backend/reception.h"
 
 namespace qm::backend {

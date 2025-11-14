@@ -1,3 +1,9 @@
+/*
+src/backend/demo.cpp
+This is intended to simulate instrument behavior, including
+artificial noise and mimic and the qualities of the individual
+parts and devices connected to the apparatus.
+*/
 #include "backend/demo.h"
 #include <chrono>
 

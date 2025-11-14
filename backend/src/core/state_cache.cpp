@@ -1,3 +1,9 @@
+/*
+src/core/state_cache.cpp
+Functions for accessing and storing signals that will be sent
+to the frontend to update the frontends schematic display of the 
+backend.
+*/
 #include "core/state_cache.h"
 #include <algorithm>
 
