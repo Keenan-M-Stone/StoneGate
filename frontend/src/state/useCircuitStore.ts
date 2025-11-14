@@ -1,7 +1,10 @@
 // src/state/useCircuitStore.ts
 import { create } from "zustand";
 
-export interface ComplexNumber { re: number; im: number; }
+export interface ComplexNumber {
+  re: number;
+  im: number;
+}
 
 export interface BaseGate {
   id: string;
@@ -13,12 +16,16 @@ export interface BaseGate {
   matrix: ComplexNumber[][];
 }
 
-export interface AtomicGate extends BaseGate { type: "atomic"; }
+export interface AtomicGate extends BaseGate {
+  type: "atomic";
+}
+
 export interface CompositeGate extends BaseGate {
   type: "composite";
   subCircuit: CircuitModel;
   qubitMapping?: number[];
 }
+
 export type GateModel = AtomicGate | CompositeGate;
 
 export interface CircuitModel {
@@ -31,8 +38,15 @@ export interface CircuitModel {
 export interface QubitBundle {
   id: string;
   name: string;
-  qbits: number[]; // indices in parent circuit
+  qbits: number[]; // indices in parent circuit (sorted ascending)
   color?: string;
+}
+
+interface CircuitSnapshot {
+  circuit: CircuitModel;
+  bundles: QubitBundle[];
+  selectedGateIds: string[];
+  selectedQubits: number[];
 }
 
 interface CircuitState {
@@ -42,14 +56,17 @@ interface CircuitState {
   bundles: QubitBundle[];
   editingGate?: GateModel | null;
 
-  // history (for option A snapshot undo/redo)
-  past: CircuitModel[];
-  future: CircuitModel[];
+  // Undo/Redo
+  _past: CircuitSnapshot[];
+  _future: CircuitSnapshot[];
+  pushSnapshot: () => void;
+  undo: () => void;
+  redo: () => void;
 
   // Basic ops
   addGate: (gate: GateModel) => void;
   removeGate: (id: string) => void;
-  updateGate: (id: string, updates: Partial<GateModel> | GateModel) => void;
+  updateGate: (idOrGate: string | GateModel, updates?: Partial<GateModel>) => void; // flexible: full replace or partial
   duplicateGate: (id: string) => void;
   moveGatesTo: (ids: string[], column: number, qbitsForEach?: Record<string, number[]>) => void;
   setEditingGate: (gate: GateModel | null) => void;
@@ -73,19 +90,18 @@ interface CircuitState {
   // Persistence
   saveCircuit: () => void;
   loadCircuit: () => void;
-
-  // Undo/Redo (Option A — full snapshot)
-  undo: () => void;
-  redo: () => void;
-  clearHistory: () => void;
 }
 
 function generateIdentity(dim: number): ComplexNumber[][] {
   return Array.from({ length: dim }, (_, r) =>
-    Array.from({ length: dim }, (_, c) => ({ re: r === c ? 1 : 0, im: 0 }))
+    Array.from({ length: dim }, (_, c) => ({
+      re: r === c ? 1 : 0,
+      im: 0,
+    }))
   );
 }
 
+/** small helper to create an atomic identity gate for a given qbits length */
 function createIdentityAtomicGate(qbits: number[], column = 0): AtomicGate {
   const dim = 2 ** qbits.length;
   return {
@@ -100,101 +116,196 @@ function createIdentityAtomicGate(qbits: number[], column = 0): AtomicGate {
 }
 
 export const useCircuitStore = create<CircuitState>((set, get) => {
-  // helper to deep clone a circuit snapshot
-  const snapshot = (c: CircuitModel) => JSON.parse(JSON.stringify(c)) as CircuitModel;
-
-  // helper that records current circuit to past, clears future, and applies change
-  const applyWithSnapshot = (changer: (s: CircuitState) => Partial<CircuitState>) =>
-    set((s) => {
-      const before = snapshot(s.circuit);
-      const changes = changer(s) || {};
-      return {
-        ...changes,
-        past: [...s.past, before],
-        future: [],
-      } as Partial<CircuitState> as CircuitState;
-    });
+  // Helper: grab a snapshot of relevant UI state for undo/redo
+  const makeSnapshot = (): CircuitSnapshot => ({
+    circuit: JSON.parse(JSON.stringify(get().circuit)) as CircuitModel,
+    bundles: JSON.parse(JSON.stringify(get().bundles)) as QubitBundle[],
+    selectedGateIds: [...get().selectedGateIds],
+    selectedQubits: [...get().selectedQubits],
+  });
 
   return {
-    // initial app state
-    circuit: { id: "root", name: "root", gates: [], numQubits: 2 },
+    /* initial present state */
+    circuit: {
+      id: "root",
+      name: "root",
+      gates: [],
+      numQubits: 2,
+    },
     selectedGateIds: [],
     selectedQubits: [],
     bundles: [],
     editingGate: null,
-    past: [],
-    future: [],
 
-    /* ---------------- basic ops ---------------- */
+    /* undo/redo stacks */
+    _past: [],
+    _future: [],
+    pushSnapshot: () => {
+      set((s) => {
+        const snap = {
+          circuit: JSON.parse(JSON.stringify(s.circuit)) as CircuitModel,
+          bundles: JSON.parse(JSON.stringify(s.bundles)) as QubitBundle[],
+          selectedGateIds: [...s.selectedGateIds],
+          selectedQubits: [...s.selectedQubits],
+        };
+        return { _past: [...s._past, snap], _future: [] };
+      });
+    },
+    undo: () =>
+      set((s) => {
+        if (s._past.length === 0) return s;
+        const past = [...s._past];
+        const last = past.pop() as CircuitSnapshot;
+        const presentSnap: CircuitSnapshot = {
+          circuit: JSON.parse(JSON.stringify(s.circuit)),
+          bundles: JSON.parse(JSON.stringify(s.bundles)),
+          selectedGateIds: [...s.selectedGateIds],
+          selectedQubits: [...s.selectedQubits],
+        };
+        return {
+          circuit: last.circuit,
+          bundles: last.bundles,
+          selectedGateIds: last.selectedGateIds,
+          selectedQubits: last.selectedQubits,
+          _past: past,
+          _future: [...s._future, presentSnap],
+        };
+      }),
+    redo: () =>
+      set((s) => {
+        if (s._future.length === 0) return s;
+        const future = [...s._future];
+        const next = future.pop() as CircuitSnapshot;
+        const presentSnap: CircuitSnapshot = {
+          circuit: JSON.parse(JSON.stringify(s.circuit)),
+          bundles: JSON.parse(JSON.stringify(s.bundles)),
+          selectedGateIds: [...s.selectedGateIds],
+          selectedQubits: [...s.selectedQubits],
+        };
+        return {
+          circuit: next.circuit,
+          bundles: next.bundles,
+          selectedGateIds: next.selectedGateIds,
+          selectedQubits: next.selectedQubits,
+          _past: [...s._past, presentSnap],
+          _future: future,
+        };
+      }),
+
+    /* basic ops — each mutating op should push a snapshot first */
     addGate: (gate) =>
-      applyWithSnapshot((s) => ({ circuit: { ...s.circuit, gates: [...s.circuit.gates, gate] } })),
+      set((s) => {
+        const snap = makeSnapshot();
+        return {
+          _past: [...s._past, snap],
+          _future: [],
+          circuit: { ...s.circuit, gates: [...s.circuit.gates, gate] },
+        };
+      }),
 
     removeGate: (id) =>
-      applyWithSnapshot((s) => ({ circuit: { ...s.circuit, gates: s.circuit.gates.filter((g) => g.id !== id) } })),
+      set((s) => {
+        const snap = makeSnapshot();
+        return {
+          _past: [...s._past, snap],
+          _future: [],
+          circuit: { ...s.circuit, gates: s.circuit.gates.filter((g) => g.id !== id) },
+        };
+      }),
 
-    updateGate: (id, updates) =>
-      applyWithSnapshot((s) => {
-        const updatedGates = s.circuit.gates.map((g) => {
-          if (g.id !== id) return g;
-          // If updates looks like a full GateModel (has matrix and qbits) replace entirely,
-          // otherwise shallow merge partials.
-          const maybeFull = updates as GateModel;
-          if ((maybeFull as GateModel).matrix !== undefined && (maybeFull as GateModel).qbits !== undefined) {
-            return { ...(maybeFull as GateModel) };
-          } else {
-            return { ...(g as any), ...(updates as Partial<typeof g>) } as GateModel;
-          }
-        });
-        return { circuit: { ...s.circuit, gates: updatedGates } };
+    // updateGate: flexible — if caller provides a full GateModel (has matrix && qbits) we replace; otherwise merge partial updates
+    updateGate: (idOrGate, updates) =>
+      set((s) => {
+        const snap = makeSnapshot();
+        // handle call signature: updateGate(gateObj) or updateGate(id, partial)
+        if (typeof idOrGate !== "string") {
+          // full replace
+          const gateObj = idOrGate as GateModel;
+          return {
+            _past: [...s._past, snap],
+            _future: [],
+            circuit: { ...s.circuit, gates: s.circuit.gates.map((g) => (g.id === gateObj.id ? gateObj : g)) },
+          };
+        } else {
+          const id = idOrGate as string;
+          const partial = updates as Partial<GateModel>;
+          return {
+            _past: [...s._past, snap],
+            _future: [],
+            circuit: {
+              ...s.circuit,
+              gates: s.circuit.gates.map((g) => {
+                if (g.id !== id) return g;
+                const merged = { ...(g as any), ...(partial as any) } as GateModel;
+                return merged;
+              }),
+            },
+          };
+        }
       }),
 
     duplicateGate: (id) =>
-      applyWithSnapshot((s) => {
+      set((s) => {
         const g = s.circuit.gates.find((x) => x.id === id);
-        if (!g) return {};
+        if (!g) return s;
         const dup = { ...g, id: crypto.randomUUID(), column: (g.column ?? 0) + 1 };
-        return { circuit: { ...s.circuit, gates: [...s.circuit.gates, dup] } };
+        const snap = makeSnapshot();
+        return { _past: [...s._past, snap], _future: [], circuit: { ...s.circuit, gates: [...s.circuit.gates, dup] } };
       }),
 
     moveGatesTo: (ids, column, qbitsForEach) =>
-      applyWithSnapshot((s) => ({
-        circuit: {
-          ...s.circuit,
-          gates: s.circuit.gates.map((g) =>
-            ids.includes(g.id)
-              ? { ...g, column, qbits: qbitsForEach?.[g.id] ?? g.qbits }
-              : g
-          ),
-        },
-      })),
+      set((s) => {
+        const snap = makeSnapshot();
+        return {
+          _past: [...s._past, snap],
+          _future: [],
+          circuit: {
+            ...s.circuit,
+            gates: s.circuit.gates.map((g) =>
+              ids.includes(g.id) ? { ...g, column, qbits: qbitsForEach?.[g.id] ?? g.qbits } : g
+            ),
+          },
+        };
+      }),
 
     setEditingGate: (gate) => set({ editingGate: gate }),
     setSelectedGates: (ids) => set({ selectedGateIds: ids }),
 
-    /* ---------------- qubits ---------------- */
     addQubit: () =>
-      applyWithSnapshot((s) => ({ circuit: { ...s.circuit, numQubits: s.circuit.numQubits + 1 } })),
+      set((s) => {
+        const snap = makeSnapshot();
+        return {
+          _past: [...s._past, snap],
+          _future: [],
+          circuit: { ...s.circuit, numQubits: s.circuit.numQubits + 1 },
+        };
+      }),
 
     removeQubit: () =>
-      applyWithSnapshot((s) => {
+      set((s) => {
+        const snap = makeSnapshot();
         const newCount = Math.max(1, s.circuit.numQubits - 1);
         return {
+          _past: [...s._past, snap],
+          _future: [],
           circuit: {
             ...s.circuit,
             numQubits: newCount,
             gates: s.circuit.gates.filter((g) => g.qbits.every((q) => q < newCount)),
           },
+          // also clear selectedQubits that are out of range
+          selectedQubits: s.selectedQubits.filter((q) => q < newCount),
         };
       }),
 
-    /* ------------- grouping / composite ------------- */
+    /* Grouping */
     groupSelectedGates: () =>
-      applyWithSnapshot((s) => {
+      set((s) => {
         const ids = s.selectedGateIds;
-        if (ids.length < 2) return {};
+        if (ids.length < 2) return s; // nothing to group
         const selected = s.circuit.gates.filter((g) => ids.includes(g.id));
         const remaining = s.circuit.gates.filter((g) => !ids.includes(g.id));
-        const minColumn = Math.min(...selected.map((g) => g.column));
+        const minColumn = Math.min(...selected.map((g) => g.column ?? 0));
         const involvedQubits = Array.from(new Set(selected.flatMap((g) => g.qbits))).sort((a, b) => a - b);
 
         const subCircuit: CircuitModel = {
@@ -218,25 +329,34 @@ export const useCircuitStore = create<CircuitState>((set, get) => {
           qubitMapping: involvedQubits.slice(),
         };
 
+        const snap = makeSnapshot();
         return {
+          _past: [...s._past, snap],
+          _future: [],
           circuit: { ...s.circuit, gates: [...remaining, compositeGate] },
           selectedGateIds: [],
         };
       }),
 
+    /***************
+     * Ungrouping
+     ***************/
     ungroupCompositeGate: (id) =>
-      applyWithSnapshot((s) => {
+      set((s) => {
         const target = s.circuit.gates.find((g): g is CompositeGate => g.id === id && g.type === "composite");
-        if (!target) return {};
+        if (!target) return s;
         const remaining = s.circuit.gates.filter((g) => g.id !== id);
         const expanded: GateModel[] = target.subCircuit.gates.map((g) => {
           const mappedQbits = g.qbits.map((q) => target.qubitMapping?.[q] ?? target.qbits[q] ?? q);
           return { ...(g as any), id: crypto.randomUUID(), column: target.column + (g.column ?? 0), qbits: mappedQbits } as GateModel;
         });
-        return { circuit: { ...s.circuit, gates: [...remaining, ...expanded] } };
+        const snap = makeSnapshot();
+        return { _past: [...s._past, snap], _future: [], circuit: { ...s.circuit, gates: [...remaining, ...expanded] } };
       }),
 
-    /* ------------- qubit bundles ------------- */
+    /***************
+     * Qubits / Bundles
+     ***************/
     setSelectedQubits: (ids) => set({ selectedQubits: ids }),
     toggleSelectQubit: (q, multi) =>
       set((s) => {
@@ -250,22 +370,31 @@ export const useCircuitStore = create<CircuitState>((set, get) => {
         }
         return { selectedQubits: Array.from(cur) };
       }),
+
     clearSelectedQubits: () => set({ selectedQubits: [] }),
 
     createQubitBundle: (name, qbits, color) =>
-      applyWithSnapshot((s) => {
+      set((s) => {
         const id = crypto.randomUUID();
-        const bundle: QubitBundle = { id, name, qbits: [...qbits].sort((a, b) => a - b), color };
-        return { bundles: [...s.bundles, bundle] };
+        const bundle = { id, name, qbits: [...qbits].sort((a, b) => a - b), color };
+        const snap = makeSnapshot();
+        return { _past: [...s._past, snap], _future: [], bundles: [...s.bundles, bundle], selectedQubits: [] };
       }),
 
+    // removing bundle: permanently deletes it from bundles; adding a qubit later will not "restore" the removed bundle.
     removeQubitBundle: (id) =>
-      applyWithSnapshot((s) => ({ bundles: s.bundles.filter((b) => b.id !== id) })),
+      set((s) => {
+        const snap = makeSnapshot();
+        return { _past: [...s._past, snap], _future: [], bundles: s.bundles.filter((b) => b.id !== id) };
+      }),
 
-    /* ------------- persistence ------------- */
+    /***************
+     * Persistence
+     ***************/
     saveCircuit: () => {
-      const { circuit } = get();
+      const { circuit, bundles } = get();
       localStorage.setItem("circuit", JSON.stringify(circuit));
+      localStorage.setItem("bundles", JSON.stringify(bundles));
     },
 
     loadCircuit: () => {
@@ -273,32 +402,11 @@ export const useCircuitStore = create<CircuitState>((set, get) => {
       if (!data) return;
       try {
         const parsed = JSON.parse(data) as CircuitModel;
-        // loading a circuit is a snapshot-worthy action
-        applyWithSnapshot(() => ({ circuit: parsed }));
+        const parsedBundles = JSON.parse(localStorage.getItem("bundles") || "[]") as QubitBundle[];
+        set({ circuit: parsed, bundles: parsedBundles });
       } catch {
-        // noop
+        // noop on parse error
       }
     },
-
-    /* ------------- undo / redo (Option A — snapshots) ------------- */
-    undo: () =>
-      set((s) => {
-        if (!s.past?.length) return s;
-        const prev = s.past[s.past.length - 1];
-        const newPast = s.past.slice(0, -1);
-        const newFuture = [snapshot(s.circuit), ...(s.future ?? [])];
-        return { circuit: snapshot(prev), past: newPast, future: newFuture } as Partial<CircuitState> as CircuitState;
-      }),
-
-    redo: () =>
-      set((s) => {
-        if (!s.future?.length) return s;
-        const next = s.future[0];
-        const newFuture = s.future.slice(1);
-        const newPast = [...(s.past ?? []), snapshot(s.circuit)];
-        return { circuit: snapshot(next), past: newPast, future: newFuture } as Partial<CircuitState> as CircuitState;
-      }),
-
-    clearHistory: () => set((s) => ({ past: [], future: [] })),
   };
 });
