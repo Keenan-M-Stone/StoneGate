@@ -1,0 +1,13 @@
+{
+  "name": "qc-backend-simulator",
+  "version": "0.1.0",
+  "description": "Simple WebSocket backend simulator for Quantum Control Frontend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0",
+    "uuid": "^9.0.0"
+  }
+}

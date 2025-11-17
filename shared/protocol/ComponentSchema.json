@@ -1,0 +1,26 @@
+{
+    "PhotonicQubit": {
+        "displayName": "Photonic Qubit",
+        "properties": ["frequency", "temperature"],
+        "interactive": ["reset", "zero"],
+        "plot": ["temperature"]
+    },
+    "PhotonicDetector": {
+        "displayName": "Photonic Detector",
+        "properties": ["counts", "dark_rate", "temperature"],
+        "interactive": ["zero", "view_histogram"],
+        "plot": ["counts"]
+    },
+    "Laser": {
+        "displayName": "Laser",
+        "properties": ["optical_power", "temperature"],
+        "interactive": ["enable", "disable", "set_power"],
+        "plot": ["optical_power"]
+    },
+    "PhaseModulator": {
+        "displayName": "Phase Modulator",
+        "properties": ["phase", "temperature"],
+        "interactive": ["set_phase", "calibrate"],
+        "plot": ["phase"]
+    }
+}

@@ -1,0 +1,13 @@
+{
+    "nodes": [
+        { "id": "laser0", "type": "Laser", "x": 80, "y": 120, "label": "Laser 0" },
+        { "id": "pm0", "type": "PhaseModulator", "x": 300, "y": 120, "label": "Phase Mod 0" },
+        { "id": "wg0", "type": "Waveguide", "x": 520, "y": 120, "label": "Waveguide" },
+        { "id": "det0", "type": "PhotonicDetector", "x": 740, "y": 120, "label": "Detector 0" }
+    ],
+    "edges": [
+        { "from": "laser0", "to": "pm0" },
+        { "from": "pm0", "to": "wg0" },
+        { "from": "wg0", "to": "det0" }
+    ]
+}

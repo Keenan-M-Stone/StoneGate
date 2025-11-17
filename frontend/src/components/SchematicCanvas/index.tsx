@@ -29,8 +29,8 @@ export default function SchematicCanvas() {
         {nodes.map((n:any) => {
           const status = devices[n.id]
           return (
-            <foreignObject key={n.id} x={n.x - 80} y={n.y - 40} width={160} height={80}>
-              <div style={{ width: 160, height: 80 }}>
+            <foreignObject key={n.id} x={n.x - 80} y={n.y - 40} width={200} height={170}>
+              <div style={{ width: 180, height: 150 }}>
                 <ComponentNode
                   id={n.id}
                   label={n.label}
