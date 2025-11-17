@@ -1,0 +1,37 @@
+{
+  "nodes": [
+    {
+      "id": "laser0",
+      "type": "laser",
+      "x": 100,
+      "y": 80,
+      "label": "Laser 0"
+    },
+    {
+      "id": "modulator0",
+      "type": "phase_modulator",
+      "x": 300,
+      "y": 80,
+      "label": "Phase Mod 0"
+    },
+    {
+      "id": "waveguide0",
+      "type": "waveguide",
+      "x": 500,
+      "y": 80,
+      "label": "WG 0"
+    },
+    {
+      "id": "detector0",
+      "type": "detector",
+      "x": 700,
+      "y": 80,
+      "label": "SNSPD 0"
+    }
+  ],
+  "connections": [
+    ["laser0", "modulator0"],
+    ["modulator0", "waveguide0"],
+    ["waveguide0", "detector0"]
+  ]
+}

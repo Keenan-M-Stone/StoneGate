@@ -1,0 +1,23 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ],
+  "compilerOptions": {
+  "target": "ES2021",
+  "useDefineForClassFields": true,
+  "lib": ["DOM", "ES2021"],
+  "jsx": "react-jsx",
+  "module": "ESNext",
+  "moduleResolution": "Node",
+  "strict": true,
+  "esModuleInterop": true,
+  "skipLibCheck": true,
+  "forceConsistentCasingInFileNames": true,
+  "resolveJsonModule": true,
+  "outDir": "dist"
+  },
+  "include": ["src"]
+
+}

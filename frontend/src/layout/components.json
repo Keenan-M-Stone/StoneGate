@@ -1,0 +1,26 @@
+{
+  "laser": {
+    "icon": "icons/laser.svg",
+    "metrics": ["optical_power", "temperature"],
+    "operations": ["enable", "disable", "set_power"],
+    "help_url": "https://vendor.com/laser-1234"
+  },
+  "phase_modulator": {
+    "icon": "icons/modulator.svg",
+    "metrics": ["phase", "temperature"],
+    "operations": ["set_phase", "calibrate"],
+    "help_url": "https://vendor.com/phase-modulator"
+  },
+  "waveguide": {
+    "icon": "icons/waveguide.svg",
+    "metrics": [],
+    "operations": [],
+    "help_url": "https://vendor.com/wg"
+  },
+  "detector": {
+    "icon": "icons/detector.svg",
+    "metrics": ["photon_count", "temperature"],
+    "operations": ["zero", "view_histogram"],
+    "help_url": "https://vendor.com/detector"
+  }
+}
