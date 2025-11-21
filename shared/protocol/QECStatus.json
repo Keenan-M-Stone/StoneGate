@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QECStatus",
+  "type": "object",
+  "properties": {
+    "job_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["queued", "running", "done", "error"] },
+    "progress": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "required": ["job_id", "status"]
+}

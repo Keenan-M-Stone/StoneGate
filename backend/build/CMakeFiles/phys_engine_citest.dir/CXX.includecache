@@ -1,0 +1,42 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/core/PhysicsEngine.hpp
+string
+-
+unordered_map
+-
+vector
+-
+thread
+-
+mutex
+-
+atomic
+-
+chrono
+-
+nlohmann/json.hpp
+-
+filesystem
+-
+
+/home/lemma137/dev/StoneGate/backend/tests/phys_engine_citest.cpp
+iostream
+-
+cassert
+-
+core/PhysicsEngine.hpp
+/home/lemma137/dev/StoneGate/backend/tests/core/PhysicsEngine.hpp
+nlohmann/json.hpp
+-
+fstream
+-
+filesystem
+-
+

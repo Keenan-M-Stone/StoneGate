@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QECResult",
+  "type": "object",
+  "properties": {
+    "job_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["queued", "running", "done", "error"] },
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "qubit": { "type": "integer" },
+          "round": { "type": "integer" },
+          "correction": { "type": "integer", "enum": [0, 1] }
+        },
+        "required": ["qubit", "round", "correction"]
+      }
+    },
+    "statistics": { "type": "object" },
+    "raw_decision": {}
+  },
+  "required": ["job_id", "status"]
+}

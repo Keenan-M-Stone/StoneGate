@@ -1,0 +1,46 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/Device.hpp
+string
+-
+nlohmann/json.hpp
+-
+
+../include/devices/LN2CoolingControllerDevice.hpp
+Device.hpp
+../include/devices/Device.hpp
+random
+-
+
+../include/devices/PhotonicDetectorDevice.hpp
+Device.hpp
+../include/devices/Device.hpp
+random
+-
+
+../include/devices/ThermocoupleDevice.hpp
+Device.hpp
+../include/devices/Device.hpp
+random
+-
+
+/home/lemma137/dev/StoneGate/backend/tests/devices_citest.cpp
+iostream
+-
+cassert
+-
+devices/ThermocoupleDevice.hpp
+/home/lemma137/dev/StoneGate/backend/tests/devices/ThermocoupleDevice.hpp
+devices/PhotonicDetectorDevice.hpp
+/home/lemma137/dev/StoneGate/backend/tests/devices/PhotonicDetectorDevice.hpp
+devices/LN2CoolingControllerDevice.hpp
+/home/lemma137/dev/StoneGate/backend/tests/devices/LN2CoolingControllerDevice.hpp
+nlohmann/json.hpp
+-
+

@@ -1,0 +1,23 @@
+{
+  "parts": {
+    "name_and_spec_required": "name and spec required",
+    "cannot_overwrite_builtin": "cannot overwrite builtin part; set save_as_new and provide new_name",
+    "new_name_required": "new_name required when save_as_new is true",
+    "saved": "saved",
+    "deleted": "deleted",
+    "not_found": "not found in user parts"
+  },
+  "overrides": {
+    "device_and_override_required": "device_id and override required",
+    "validation_failed": "validation failed",
+    "saved": "saved",
+    "deleted": "deleted",
+    "touched": "touched",
+    "failed": "failed"
+  },
+  "qec": {
+    "queued": "queued",
+    "not_found": "not found",
+    "not_ready": "not ready"
+  }
+}

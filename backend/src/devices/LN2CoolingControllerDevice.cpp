@@ -1,0 +1,35 @@
+#include "devices/LN2CoolingControllerDevice.hpp"
+
+LN2CoolingControllerDevice::LN2CoolingControllerDevice(std::string id)
+: dev_id(id), setpoint_K(77.0), flow_rate(0.0) {}
+
+std::string LN2CoolingControllerDevice::id() const { return dev_id; }
+std::string LN2CoolingControllerDevice::type() const { return "ln2_cooling_controller"; }
+
+nlohmann::json LN2CoolingControllerDevice::descriptor() const {
+    return {
+        {"id", dev_id},
+        {"type", "ln2_cooling_controller"},
+        {"status", "ok"},
+        {"specs", {
+            {"setpoint_range_K", {60, 300}},
+            {"max_flow_rate", 10.0},
+            {"manufacturer", "CryoTech"},
+            {"datasheet_url", "https://example.com/ln2controller"}
+        }}
+    };
+}
+
+nlohmann::json LN2CoolingControllerDevice::read_measurement() {
+    double temp = setpoint_K + std::normal_distribution<double>(0, 0.2)(rng);
+    double flow = flow_rate + std::normal_distribution<double>(0, 0.05)(rng);
+    return {
+        {"temperature_K", temp},
+        {"flow_rate_Lmin", flow}
+    };
+}
+
+void LN2CoolingControllerDevice::perform_action(const nlohmann::json& cmd) {
+    if (cmd.contains("set_setpoint")) setpoint_K = cmd["set_setpoint"].get<double>();
+    if (cmd.contains("set_flow_rate")) flow_rate = cmd["set_flow_rate"].get<double>();
+}

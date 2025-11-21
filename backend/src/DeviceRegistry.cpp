@@ -8,6 +8,11 @@ void DeviceRegistry::register_device(std::shared_ptr<Device> dev) {
     devices.push_back(dev);
 }
 
+void DeviceRegistry::for_each_device(const std::function<void(std::shared_ptr<Device>)>& fn) {
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    for (auto& d : devices) fn(d);
+}
+
 nlohmann::json DeviceRegistry::get_descriptor_graph() {
     std::lock_guard<std::mutex> lock(registry_mutex);
     nlohmann::json graph = nlohmann::json::array();

@@ -4,6 +4,7 @@
 #include <functional>
 #include <string>
 #include <memory>
+#include <nlohmann/json.hpp>
 
 class DescriptorProtocol;
 class DeviceRegistry;
@@ -15,6 +16,8 @@ public:
 
     void start();
     void stop();
+    // Handle control messages (from websocket or other control channel)
+    void handle_control(const nlohmann::json& msg);
 
 private:
     void run_event_loop();

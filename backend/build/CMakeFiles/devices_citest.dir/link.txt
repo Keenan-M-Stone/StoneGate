@@ -1,0 +1,1 @@
+/usr/bin/c++  -g   CMakeFiles/devices_citest.dir/tests/devices_citest.cpp.o  -o devices_citest  libcore.a -lpthread 

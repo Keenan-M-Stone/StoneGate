@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "QECRequest",
+  "type": "object",
+  "properties": {
+    "job_id": { "type": "string" },
+    "code": { "type": "string", "enum": ["surface", "repetition", "custom"] },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "qubit": { "type": "integer" },
+          "basis": { "type": "string", "enum": ["X", "Z"] },
+          "round": { "type": "integer" },
+          "value": { "type": "integer", "enum": [0, 1] },
+          "ts": { "type": "integer" }
+        },
+        "required": ["qubit", "basis", "round", "value"]
+      }
+    },
+    "params": { "type": "object" }
+  },
+  "required": ["code", "measurements"]
+}

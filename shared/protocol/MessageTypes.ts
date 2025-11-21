@@ -17,3 +17,32 @@ export interface DeviceStatus {
 
 
 export type StatusUpdateMessage = DeviceStatus
+
+
+// QEC API message types
+export type QECRequest = {
+  job_id?: string;
+  code: 'surface' | 'repetition' | 'custom';
+  measurements: Array<{
+    qubit: number;
+    basis: 'X' | 'Z';
+    round: number;
+    value: 0 | 1;
+    ts?: number;
+  }>;
+  params?: Record<string, any>;
+};
+
+export type QECResult = {
+  job_id: string;
+  status: 'queued' | 'running' | 'done' | 'error';
+  corrections?: Array<{ qubit: number; round: number; correction: 0 | 1 }>;
+  statistics?: Record<string, any>;
+  raw_decision?: any;
+};
+
+export type QECStatus = {
+  job_id: string;
+  status: 'queued' | 'running' | 'done' | 'error';
+  progress?: number;
+};

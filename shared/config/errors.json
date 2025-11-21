@@ -1,0 +1,13 @@
+{
+  "ranges": {
+    "frontend":  { "start": 1000, "end": 1999 },
+    "backend":   { "start": 2000, "end": 2999 },
+    "qec":       { "start": 3000, "end": 3999 }
+  },
+  "errors": [
+    { "code": 1000, "message": "Invalid identifier: %s", "cause": "Malformed/illegal characters or length", "action": "Use only A-Za-z0-9_-:. and <=128 chars" },
+    { "code": 1100, "message": "Cannot overwrite builtin part '%s' without Save-As-New", "cause": "Attempted to overwrite builtin part", "action": "Use Save-As-New and provide a new name" },
+    { "code": 2000, "message": "Failed to read device '%s' — I/O error: %s", "cause": "Driver/connection issue", "action": "Check physical connections and drivers" },
+    { "code": 2310, "message": "Override reload failed for file '%s'", "cause": "Malformed JSON or read error", "action": "Fix JSON syntax or file permissions" }
+  ]
+}

@@ -22,5 +22,35 @@
         "properties": ["phase", "temperature"],
         "interactive": ["set_phase", "calibrate"],
         "plot": ["phase"]
+    },
+    "LN2CoolingController": {
+        "displayName": "LN2 Cooling Controller",
+        "properties": ["temperature_K", "flow_rate_Lmin"],
+        "interactive": ["set_setpoint", "set_flow_rate"],
+        "plot": ["temperature_K", "flow_rate_Lmin"]
+    },
+    "AncillaQubit": {
+        "displayName": "Ancilla Qubit",
+        "properties": ["state", "role"],
+        "interactive": ["reset", "set_role"],
+        "plot": ["state"]
+    },
+    "QuantumRegister": {
+        "displayName": "Quantum Register",
+        "properties": ["state_vector"],
+        "interactive": ["reset_all", "apply_gate"],
+        "plot": ["state_vector"]
+    },
+    "PulseSequencer": {
+        "displayName": "Pulse Sequencer",
+        "properties": ["current_step", "running"],
+        "interactive": ["load_sequence", "start", "stop", "step"],
+        "plot": ["current_step"]
+    },
+    "QECModule": {
+        "displayName": "QEC Module",
+        "properties": ["syndrome", "correction_applied"],
+        "interactive": ["extract_syndrome", "apply_correction", "set_code_type"],
+        "plot": ["syndrome"]
     }
 }

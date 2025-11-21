@@ -1,0 +1,21 @@
+#pragma once
+#include "Device.hpp"
+#include <random>
+
+/**
+ * @brief Ancilla qubit device for error correction and helper operations.
+ */
+class AncillaQubitDevice : public Device {
+public:
+    AncillaQubitDevice(std::string id);
+    std::string id() const override;
+    std::string type() const override;
+    nlohmann::json descriptor() const override;
+    nlohmann::json read_measurement() override;
+    void perform_action(const nlohmann::json& cmd) override;
+private:
+    std::string dev_id;
+    int last_measurement;
+    std::string role;
+    std::default_random_engine rng;
+};

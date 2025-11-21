@@ -14,6 +14,9 @@ public:
 
     void register_device(std::shared_ptr<Device> dev);
 
+    // Apply a function to each registered device (thread-safe)
+    void for_each_device(const std::function<void(std::shared_ptr<Device>)>& fn);
+
     // Return all descriptors for FE discovery
     nlohmann::json get_descriptor_graph();
 
