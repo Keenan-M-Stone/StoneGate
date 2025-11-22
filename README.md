@@ -10,12 +10,15 @@
 
 ## Prerequisites
 
-- C++20 compiler (GCC 10+, Clang 11+, or MSVC 2019+)
-- CMake 3.16+
-- [nlohmann/json](https://github.com/nlohmann/json) (header-only, included)
-- Node.js 20+ (for backend-sim and frontend)
-- pnpm (or npm/yarn) for frontend
-- `flask` and `jsonschema` python packages for testing QEC interface.
+ - C++20 compiler (GCC 10+, Clang 11+, or MSVC 2019+)
+ - CMake 3.16+
+ - nlohmann json development package (optional):  
+   - `nlohmann-json3-dev` (lets CMake find `nlohmann_json` target)
+   - [nlohmann/json](https://github.com/nlohmann/json) (header-only, included)
+ - Node.js 20+ (for backend-sim and frontend)
+ - pnpm (or npm/yarn) for frontend
+ - `flask` and `jsonschema` python packages for testing QEC interface.
+ - libcurl development headers: `libcurl4-openssl-dev` (needed to build `tools/qec_client`)
 
 ## Backend (C++)
 
@@ -83,52 +86,80 @@ pnpm dev       # or npm run dev
 
 ---
 
-## Testing
+### Testing
 
 - Run `./test_simulator --seed 42` to verify that simulated devices are loaded and produce deterministic measurements.
 - Extend with more tests as needed for device logic, protocol, and QEC endpoints.
 
 ---
 
----
-
-## Project layout
+### Project layout
 
 ```
 quantum-monitor/
+├── README.md
 ├── backend/
+│   ├── CMakeLists.txt
 │   ├── include/
-│   │   ├── core/state_cache.h
-│   │   ├── backend/diagnostic.h
-│   │   ├── backend/results.h
-│   │   ├── backend/reception.h
-│   │   ├── backend/demo.h
-│   │   └── net/websocket_server.h
+│   │   ├── Device.hpp
+│   │   ├── DeviceRegistry.hpp
+│   │   └── WebSocketServer.hpp
 │   ├── src/
-│   │   ├── core/state_cache.cpp
-│   │   ├── backend/diagnostic.cpp
-│   │   ├── backend/results.cpp
-│   │   ├── backend/reception.cpp
-│   │   ├── backend/demo.cpp
-│   │   └── net/websocket_server.cpp
-│   └── CMakeLists.txt
+│   │   ├── main.cpp
+│   │   ├── Backend.cpp
+│   │   ├── DeviceRegistry.cpp
+│   │   ├── WebSocketServer.cpp
+│   │   └── core/
+│   │       ├── PhysicsEngine.cpp
+│   │       └── simulator/
+│   └── tests/
+├── backend-sim/
+├── docs/
 ├── frontend/
 │   ├── package.json
-│   ├── public/
 │   └── src/
-│       ├── App.tsx
-│       ├── index.tsx
-│       ├── components/
-│       │   ├── FrontendTransmission.tsx
-│       │   ├── FrontendReception.tsx
-│       │   ├── DiagnosticsPanel.tsx
-│       │   ├── CircuitEditor.tsx
-│       │   └── DeviceView.tsx
-│       └── api/websocket.ts
+│       ├── main.tsx
+│       └── components/
+│           └── SchematicCanvas/
+├── shared/
+│   ├── protocol/
+│   │   ├── DeviceGraph.json
+│   │   └── ComponentSchema.json
+│   └── config/
 ├── tools/
-│   └── demo_noise_generator.py (optional helper)
-├── README.md
 └── LICENSE
+```
+
+---
+
+#### Quick tree generator (bash alias) - For developers
+
+Below is a small bash function you can add to your shell aliases (e.g., in `~/.bashrc`) to print a compact project tree similar to the block above. It uses Python's stdlib so it doesn't require `tree` to be installed:
+
+```bash
+treeproj() {
+  python3 - <<'PY'
+import os
+def tree(path, prefix=''):
+	try:
+		entries = sorted([e for e in os.listdir(path) if not e.startswith('.')])
+	except PermissionError:
+		return
+	for i, name in enumerate(entries):
+		p = os.path.join(path, name)
+		connector = '└── ' if i == len(entries)-1 else '├── '
+		print(prefix + connector + name)
+		if os.path.isdir(p):
+			extension = '    ' if i == len(entries)-1 else '│   '
+			tree(p, prefix + extension)
+
+print('.')
+tree('.')
+PY
+}
+
+# Example usage:
+# cd /path/to/project && treeproj
 ```
 
 ---
@@ -147,21 +178,177 @@ quantum-monitor/
 
 ### Backend (Linux / WSL / macOS)
 
-- Requires: C++17, CMake >= 3.15, a websocket library (this skeleton references [WebSocket++](https://github.com/zaphoyd/websocketpp) or Boost.Beast — you can choose). For the skeleton we provide a minimal ASIO-based server placeholder.
+Requires: C++17/C++20 compiler (GCC 10+/Clang 11+/MSVC 2019+), CMake >= 3.16, and a websocket library (the codebase references WebSocket++ or Boost.Beast; the provided skeleton uses a lightweight ASIO-based placeholder).
+
+Below are step-by-step instructions for common developer and operator flows.
+
+1) Start backend in Simulator Mode (recommended for frontend/dev)
 
 ```bash
-mkdir build && cd build
-cmake ..
-cmake --build . -- -j
-./quantum-backend --port 9001
+cd backend
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build . -- -j$(nproc)
+# start in simulator mode (auto-loads shared/protocol/DeviceGraph.json)
+./StoneGate --sim
 ```
+
+Notes:
+- Simulator mode auto-loads `shared/protocol/DeviceGraph.json` and `shared/protocol/ComponentSchema.json`.
+- The `PhysicsEngine` computes derived properties (temperature, noise coeff) from controller states; `SimulatedDevice` consults the engine when producing measurements.
+- To produce deterministic outputs for debugging, use the `test_simulator` binary with a fixed seed (see "Unit tests" below).
+
+2) Start backend against real instruments (hardware mode)
+
+Prerequisites:
+- Install required device drivers / vendor SDKs and verify hardware visibility (lsusb, ip link, etc.).
+- Edit `shared/protocol/DeviceGraph.json` so nodes map to real device identifiers and parts in `PartsLibrary.json` or `shared/protocol/user_parts.json`.
+- Ensure `backend` process can read/write `shared/protocol` (for device overrides and user parts persistence).
+
+Start the backend in hardware mode:
+
+```bash
+cd backend/build
+./StoneGate
+# or with explicit port: ./StoneGate 9001
+```
+
+Notes:
+- In hardware mode the backend will attempt to instantiate real device driver classes (registered in `main.cpp`). If a driver initialization fails, check system permissions, device paths, and driver logs.
+- Use the frontend Manual Control dialog (or the stdin control hook in `main.cpp` during development) to send control messages.
+
+3) Unit tests and CI-less tests
+
+Build and run the CI-less tests (recommended; no GoogleTest dependency required):
+
+```bash
+cd backend && mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build . -- -j$(nproc)
+./phys_engine_citest
+./devices_citest
+./simulator_citest
+```
+
+Notes on GoogleTest:
+- To enable GoogleTest-based tests, configure `cmake` with `-DBUILD_TESTS=ON` and ensure a compatible GTest build is available; if you see undefined references to a prebuilt `libgtest`, prefer building GTest from source for ABI compatibility.
+
+4) Using the QEC service (Python stub) from Python or C++
+
+Start the QEC development stub (Python + Flask):
+
+```bash
+cd backend
+python3 -m pip install --user flask jsonschema
+python3 qec_stub.py
+```
+
+The stub provides these endpoints:
+
+- `POST /api/qec/submit` — submit a QEC job (request follows `shared/protocol/QECRequest.json`).
+- `GET /api/qec/status/<job_id>` — check job status.
+- `GET /api/qec/result/<job_id>` — fetch job result.
+
+Python example (submit and poll):
+
+```python
+import requests
+QEC_URL = 'http://localhost:5001'
+payload = {
+	'code': 'repetition',
+	'measurements': [{'qubit':0,'basis':'Z','round':0,'value':1}]
+}
+resp = requests.post(f"{QEC_URL}/api/qec/submit", json=payload)
+job_id = resp.json()['job_id']
+print(requests.get(f"{QEC_URL}/api/qec/status/{job_id}").json())
+print(requests.get(f"{QEC_URL}/api/qec/result/{job_id}").json())
+```
+
+C++ example (curl/libcurl):
+
+```bash
+curl -X POST http://localhost:5001/api/qec/submit -H 'Content-Type: application/json' -d '{"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]}'
+```
+
+C++ libcurl example (submit QEC job and print response):
+
+```cpp
+#include <curl/curl.h>
+#include <string>
+#include <iostream>
+
+static size_t write_cb(void* ptr, size_t size, size_t nmemb, void* userdata) {
+	std::string* resp = static_cast<std::string*>(userdata);
+	resp->append(static_cast<char*>(ptr), size * nmemb);
+	return size * nmemb;
+}
+
+int main() {
+	CURL* curl = curl_easy_init();
+	if (!curl) { std::cerr << "Failed to init curl" << std::endl; return 1; }
+
+	std::string payload = R"({"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]})";
+	std::string response;
+
+	struct curl_slist* headers = nullptr;
+	headers = curl_slist_append(headers, "Content-Type: application/json");
+
+	curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:5001/api/qec/submit");
+	curl_easy_setopt(curl, CURLOPT_POST, 1L);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(payload.size()));
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+	CURLcode res = curl_easy_perform(curl);
+	if (res != CURLE_OK) {
+		std::cerr << "curl failed: " << curl_easy_strerror(res) << std::endl;
+	} else {
+		std::cout << "Response: " << response << std::endl;
+	}
+
+	curl_slist_free_all(headers);
+	curl_easy_cleanup(curl);
+	return (res == CURLE_OK) ? 0 : 1;
+}
+```
+
+Build (example):
+
+```bash
+g++ -std=c++17 -O2 -o qec_client qec_client.cpp -lcurl
+# or if pkg-config is available:
+# g++ -std=c++17 -O2 -o qec_client qec_client.cpp $(pkg-config --cflags --libs libcurl)
+```
+
+Management endpoints (parts & overrides):
+
+- `GET /api/parts` — merged builtin + user parts (user parts override builtin names).
+- `POST /api/parts/save` — save a user part (use `save_as_new`/`new_name` to avoid overwriting builtin parts).
+- `POST /api/parts/reset` — delete a user part by name.
+- `GET /api/device_overrides` — list per-device overrides.
+- `POST /api/device_overrides/save` — save per-device override.
+- `POST /api/device_overrides/reset` — reset per-device override.
+- `POST /api/device_overrides/reload` — touch/reload overrides file (useful to trigger backend re-read).
+
+5) Supported quantum computation / QEC functions (prototype)
+
+This repository currently includes prototype QEC and decision utilities; supported/demo capabilities:
+
+- Repetition code (majority voting) — implemented as a simple decoder in the Python QEC stub.
+- Surface-code interface (stub) — the framework supports plugging in a real decoder implementation or external decoder service.
+- QEC job lifecycle APIs (submit / status / result) for integrating external decoder services.
+- Example heuristic mapping utilities (frontend): map device noise metrics (temperature, noise_coeff, photon loss) to decoder choices and parameters.
+
+To integrate a real decoder, implement a decoder service that consumes `QECRequest.json` and returns `QECResult.json`, and point the frontend or backend to that service (or extend `qec_stub.py`).
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install
-npm start
+pnpm install   # or npm install
+pnpm dev       # or npm run dev
 ```
 
 Navigate to http://localhost:3000 — the frontend will connect to ws://localhost:9001 by default.

@@ -1,10 +1,18 @@
 # StoneGate Software Specifications
 
-Version: 0.1
-Date:    2025-11-21
-Author:  StoneGate Team
+Version: 0.1  
+Date:    2025-11-21  
+Author:  StoneGate Team  
 
 This document is a reference specification for the StoneGate monitoring and control software. It describes UI dialog behavior, allowed inputs for controls, the physics and control calculations used, supported error correction algorithms and their adaptation logic, relevant hardware tolerances, and the catalogued error messages (with numbered ranges and cause/action guidance).
+
+## Prerequisites
+
+- C++ toolchain (GCC/Clang/MSVC) and CMake for building the backend and tools
+- `libcurl` development headers (e.g. `libcurl4-openssl-dev`) to build the C++ QEC client example
+- `nlohmann::json` header (packaged as `nlohmann-json3-dev` on Debian/Ubuntu) for JSON parsing in C++
+- Python 3 with `flask` (and optionally `jsonschema`) to run the QEC prototype stub
+
 
 **Contents**
 - Overview
