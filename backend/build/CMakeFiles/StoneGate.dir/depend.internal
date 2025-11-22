@@ -5,6 +5,7 @@ CMakeFiles/StoneGate.dir/src/main.cpp.o
  ../include/Device.hpp
  ../include/DeviceRegistry.hpp
  ../include/WebSocketServer.hpp
+ ../include/core/PhysicsEngine.hpp
  ../include/devices/AncillaQubitDevice.hpp
  ../include/devices/LN2CoolingControllerDevice.hpp
  ../include/devices/LaserControllerDevice.hpp
@@ -14,4 +15,5 @@ CMakeFiles/StoneGate.dir/src/main.cpp.o
  ../include/devices/QuantumRegisterDevice.hpp
  ../include/devices/ThermocoupleDevice.hpp
  ../include/simulator/SimulatedDevice.hpp
+ ../include/simulator/Simulator.hpp
  /home/lemma137/dev/StoneGate/backend/src/main.cpp

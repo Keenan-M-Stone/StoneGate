@@ -85,6 +85,96 @@ Each dialog in the frontend should adhere to these guidelines. Dialog titles, pr
 
 ---
 
+  ## Frontend Interaction Details
+
+  This section documents concrete UX affordances and expected behaviors for interactive operations in the frontend schematic.
+
+  1) Opening device dialogs (control / properties / manual actions)
+  - How to open: 
+    - Single-click a node: selects it and highlights the node frame. Selection exposes a small inline toolbar with quick actions (Inspect, Manual, Actions).
+    - Double-click a node: opens the **Device Properties Dialog** for that device (same as Inspect).
+    - Right-click a node: shows a context menu with entries: `Inspect Properties`, `Manual Control`, `Open Measurement History`, `Pin/Unpin Panel`.
+    - From the global Devices panel (left or right side, depending on layout): click a device entry and choose `Edit` or `Control` to open the dialogs.
+
+  - What each action opens:
+    - `Inspect Properties` or double-click: opens **Device Properties Dialog** (see Dialog behavior section). This dialog allows editing setpoints, choosing part, and editing overrides.
+    - `Manual Control`: opens the **Manual Control Dialog** which maps device actions (buttons, sliders) to WebSocket control messages as described in the manual control spec.
+    - `Open Measurement History`: opens a small time-series viewer for the selected device (timeseries panel) from which the user can select capture windows.
+
+  2) Entering Build Mode and the Build-mode controls
+  - How to enter Build Mode:
+    - Click the `Build` toggle button in the top-right toolbar (hammer/wrench icon) or press the `B` keyboard shortcut. When active, the schematic UI enters an edit-oriented state: selection interaction changes from live-preview to drag/drop and part placement.
+
+  - Build-mode UI elements (what each control/icon does):
+    - **Parts Browser (panel icon / left rail)**: opens the Parts Browser showing builtin and user parts. Click a part to preview; drag a part onto a node to assign it locally.
+    - **Search bar**: filters parts by name, type, and specs values.
+    - **Preview Pane**: shows selected part `specs`, `datasheet_url` and recommended tolerances.
+    - **Drag Handle**: when dragging a part over the schematic, valid drop targets highlight. Dropping assigns the `part` field in the local DeviceGraph (not persisted until `Persist Graph`).
+    - **Persist Graph (disk/save icon)**: writes the edited `DeviceGraph.json` to the workspace draft and optionally writes any per-device overrides to `device_overrides.json` when the user checks `Persist overrides`.
+    - **Undo / Redo (curved arrows)**: undo/redo local graph edits (supports at least 20 steps).
+    - **Delete / Remove Part (trash icon)**: clears the `part` field from the selected node (local only).
+    - **Save Part As New (floppy + asterisk while editing builtin)**: when editing a builtin part, Save is disabled; `Save As New` must be used to persist a copy into user parts.
+
+  - Expected interactions on click:
+    - Clicking a part preview sets the preview pane; double-clicking a part will auto-assign it to the currently selected node (if any) and show a success banner.
+    - Clicking `Persist Graph` triggers a confirmation modal that lists what files will be written (DeviceGraph draft path and device_overrides.json if selected). The server responds with success/failure and a short log on completion.
+
+  3) Where the port connection is displayed in the frontend
+  - Primary location: the application header (top bar) displays connection status and backend endpoint:
+    - The header contains `Backend status: Connected`/`Disconnected` plus a small tooltip showing the WebSocket URL (e.g., `ws://localhost:9001/status`).
+    - Clicking the status opens the **Connection Panel** which shows: `Endpoint URL`, `Last Connected`, `Messages Sent`, `Messages Received`, and `Reconnect Policy` (toggle auto-reconnect).
+
+  - Secondary location: the footer (status bar) shows a compact endpoint string and the current client ID used for the WebSocket session. This information is useful when multiple backends are used.
+
+  - How to change the displayed port/endpoint:
+    - During development: edit `frontend/.env` or set `VITE_BACKEND_WS_URL` in the shell before launching the dev server.
+    - In production: the settings panel exposes an editable endpoint field that persists to localStorage for the current user.
+
+  4) Creating a macro for complex actions (recording, triggers, stabilization criteria)
+  - Macro Editor entry points:
+    - Toolbar macro icon (gear + play), context menu on a node: `Create Macro`, or the `Macros` panel in the left rail.
+
+  - Macro creation workflow (UI steps):
+    1. **Create New Macro**: click `New Macro`, give it a `name`, optional `description`, and choose `recording mode` or `script mode`.
+    2. **Record Mode** (recommended for novice users): press `Record`, then interact with the schematic controls (perform actions such as `set LN2 flow`, `trigger pulse`, `apply offset`). The UI records a time-stamped sequence of control messages and device actions.
+    3. **Script Mode** (advanced): author a sequence of steps using the visual step editor. Each step contains:
+       - `action`: a WebSocket control message or client-side helper (e.g., wait, wait_for_measurement).
+       - `target_device(s)`: device IDs or sets (by label or query).
+       - `parameters`: action parameters (e.g., `flow_rate_Lmin: 2.5`).
+       - `timeout`: maximum time to allow the action to complete.
+       - `on_error`: `abort|continue|retry` policy.
+    4. **Add a Trigger / Stabilization Condition**: for steps that require observing a stable measurement, add a `stability` block:
+       - `monitored_devices`: list of device ids (or named device sets)
+       - `metrics`: list of measurement keys (e.g., `temperature_K`, `counts`)
+       - `tolerance`: value and mode (`absolute` or `percent`)
+       - `window_ms`: the moving window duration over which stability is evaluated
+       - `consecutive_periods`: how many successive windows must satisfy the condition
+       - semantics: the macro engine computes the metric over the moving window and considers it `stable` if the metric's standard deviation <= `tolerance` (or the relative change <= percent tolerance) for the configured `consecutive_periods`.
+    5. **Preview & Validate**: run a dry-run validation (static checks) that ensures device IDs exist, actions map to known commands, and stability checks reference valid measurement keys.
+    6. **Save / Schedule**: save the macro into `macros.json` (user-level) and optionally schedule it to run immediately or at a later time.
+
+  - Execution semantics:
+    - The macro runner sends control messages in order. When a step contains a stability condition it will poll the measurement stream (client-side cache) and evaluate the stability predicate. If the predicate is satisfied, the macro proceeds; otherwise it waits up to the `timeout` and then follows the `on_error` policy.
+    - Macros are executed client-side (fast response) but can authorize long-running sequences by delegating heavy tasks to the backend via a `macro-run` WebSocket control message which the backend can accept and orchestrate.
+
+  - Example macro (pseudocode):
+    - Name: `Tune LN2 until Detector Stabilizes`
+    - Steps:
+      1. Set `LN2Controller.flow_rate_Lmin` to `2.0`
+      2. Wait for `det0.temperature` and `det0.counts` to stabilize to `±0.5 K` and `±5 counts` respectively for `3` consecutive `5s` windows
+      3. If stable, record measurement snapshot and finish; else rollback `LN2Controller.flow_rate_Lmin` to `1.0` and mark macro as `failed`.
+
+  ---
+
+  **Side Menu & Macro UI**
+
+  - A collapsible side menu (left rail) exposes developer controls: `Build Mode` toggle and `Show Macros` checkbox. When the menu is collapsed only the rail icon remains; expanding shows the toggles.
+  - The Macro UI now supports two workflows: event recording (click-based quick macros persisted to localStorage) and script macros (loaded from `/macros.json` in the frontend). Script macros can be run from the UI and perform control actions (e.g., set LN2 flow) and wait-for-stability checks using the client-side device cache.
+
+  - The `run` action for script macros sends control messages over WebSocket (shape: `{"type":"control","cmd":"action","device_id":"<id>","action":{...}}`) and evaluates stability conditions by sampling the `useDeviceStore` values.
+
+
+
 ## Acceptable UI entries and validation rules
 
 This section enumerates, per control type, the allowed formats and acceptable ranges.

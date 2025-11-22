@@ -29,6 +29,12 @@
         "interactive": ["set_setpoint", "set_flow_rate"],
         "plot": ["temperature_K", "flow_rate_Lmin"]
     },
+    "Thermocouple": {
+        "displayName": "Thermocouple",
+        "properties": ["temperature_C"],
+        "interactive": ["zero", "calibrate"],
+        "plot": ["temperature_C"]
+    },
     "AncillaQubit": {
         "displayName": "Ancilla Qubit",
         "properties": ["state", "role"],

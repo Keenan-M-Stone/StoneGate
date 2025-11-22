@@ -28,6 +28,10 @@ private:
     std::thread event_thread;
     std::thread broadcast_thread;
 
+    // WebSocket sessions (managed by the event loop)
+    struct Impl;
+    std::shared_ptr<Impl> impl;
+
     DeviceRegistry& registry;
     std::unique_ptr<DescriptorProtocol> protocol;
 };

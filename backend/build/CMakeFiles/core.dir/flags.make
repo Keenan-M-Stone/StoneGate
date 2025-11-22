@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_FLAGS = -g   -std=gnu++2a
 
-CXX_DEFINES = 
+CXX_DEFINES = -DBOOST_ALL_NO_LIB -DBOOST_SYSTEM_DYN_LINK
 
 CXX_INCLUDES = -I/home/lemma137/dev/StoneGate/backend/include 
 

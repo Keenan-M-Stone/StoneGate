@@ -40,6 +40,26 @@ memory
 nlohmann/json.hpp
 -
 
+../include/core/PhysicsEngine.hpp
+string
+-
+unordered_map
+-
+vector
+-
+thread
+-
+mutex
+-
+atomic
+-
+chrono
+-
+nlohmann/json.hpp
+-
+filesystem
+-
+
 ../include/devices/AncillaQubitDevice.hpp
 Device.hpp
 ../include/devices/Device.hpp
@@ -102,6 +122,14 @@ random
 nlohmann/json.hpp
 -
 
+../include/simulator/Simulator.hpp
+string
+-
+cstdint
+-
+core/PhysicsEngine.hpp
+../include/simulator/core/PhysicsEngine.hpp
+
 /home/lemma137/dev/StoneGate/backend/src/main.cpp
 WebSocketServer.hpp
 /home/lemma137/dev/StoneGate/backend/src/WebSocketServer.hpp
@@ -125,6 +153,12 @@ devices/QECModuleDevice.hpp
 /home/lemma137/dev/StoneGate/backend/src/devices/QECModuleDevice.hpp
 simulator/SimulatedDevice.hpp
 /home/lemma137/dev/StoneGate/backend/src/simulator/SimulatedDevice.hpp
+simulator/Simulator.hpp
+/home/lemma137/dev/StoneGate/backend/src/simulator/Simulator.hpp
 iostream
+-
+cstdio
+-
+unistd.h
 -
 

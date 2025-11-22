@@ -42,7 +42,15 @@ cmake --build . -- -j$(nproc)
 
 ```bash
 ./StoneGate --sim
+
+# or, run in background
+nohup ./backend/build/StoneGate --sim > /tmp/StoneGate.log 2>&1 &
 ```
+
+Notes:
+- Use `./StoneGate --help` to see available options (`--sim`, `--port`, etc.).
+- The backend starts a small stdin-based control thread only when stdin is a TTY. When you run the server detached (e.g. `nohup`, `systemd`, or redirecting stdin), the stdin control thread is skipped automatically to avoid the process being stopped by the shell.
+- Additional documentation under `tools/simulators/README.md`.
 
 ### Test simulator (deterministic output)
 
@@ -506,6 +514,11 @@ In `FrontendReception` after an operation completes, the frontend will:
 1. Gather pre-operation sensor baselines and post-operation diagnostics (temperature delta, magnetic fluctuations, photon background change).
 2. Compute a noise vector `N` (vector of normalized deltas relative to tolerances).
 3. Use a mapping table of noise patterns -> ECC choices (e.g., high thermal noise -> prefer surface code with higher syndrome sampling; photon bursts -> add majority-vote over repeated measurements). This mapping is configurable and extensible.
+
+
+## Developer resources
+
+There is a concise developer quickstart in `docs/DEVELOPER.md` that shows the expected WebSocket message shapes, how the frontend hooks (`onSelectNode`, `onOpenDialog`) connect to the `SchematicCanvas`, and quick steps to run the backend in simulator mode. It also contains guidance on running the Python QEC stub, the C++ example QEC client, and a short discussion about Docker vs native deployment for demos.
 
 This is left as a decision-engine module (`frontend/src/errordecision.ts`) with pluggable rules — the codebase includes a small example function with a few heuristics.
 

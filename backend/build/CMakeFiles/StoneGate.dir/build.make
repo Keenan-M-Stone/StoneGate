@@ -80,6 +80,7 @@ StoneGate_EXTERNAL_OBJECTS =
 StoneGate: CMakeFiles/StoneGate.dir/src/main.cpp.o
 StoneGate: CMakeFiles/StoneGate.dir/build.make
 StoneGate: libcore.a
+StoneGate: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
 StoneGate: CMakeFiles/StoneGate.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lemma137/dev/StoneGate/backend/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable StoneGate"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/StoneGate.dir/link.txt --verbose=$(VERBOSE)

@@ -6,6 +6,8 @@ const WS_URL = (import.meta.env.VITE_BACKEND_WS_URL as string) ?? 'ws://localhos
 class BackendClient {
   ws: WebSocket | null = null
   connected = false
+  messagesSent = 0
+  messagesReceived = 0
 
   connect() {
     if (this.ws) return
@@ -15,11 +17,30 @@ class BackendClient {
       console.log('WS connected')
     }
     this.ws.onmessage = ev => {
+      this.messagesReceived += 1
       try {
-        const msg: StatusUpdateMessage = JSON.parse(ev.data)
-        // update store
+        const raw = JSON.parse(ev.data)
         const store = useDeviceStore.getState()
-        store.upsertDevice(msg)
+        // Support two message shapes:
+        // 1) single DeviceStatus (legacy)
+        // 2) batch: { type: 'measurement_update', updates: [{ id, measurement: { state, measurements } }, ...] }
+        if (raw && Array.isArray(raw.updates)) {
+          for (const u of raw.updates) {
+            try {
+              const device = {
+                device_id: u.id,
+                state: u.measurement?.state ?? 'unknown',
+                measurements: u.measurement?.measurements ?? {}
+              }
+              store.upsertDevice(device)
+            } catch (e) {
+              console.error('Failed to apply update entry', e)
+            }
+          }
+        } else {
+          const msg: StatusUpdateMessage = raw
+          store.upsertDevice(msg)
+        }
       } catch (e) {
         console.error('Invalid message', e)
       }
@@ -41,6 +62,19 @@ class BackendClient {
     this.ws?.close()
     this.ws = null
     this.connected = false
+  }
+
+  send(obj: any) {
+    if (!this.ws) return false
+    try {
+      this.ws.send(JSON.stringify(obj))
+      this.messagesSent += 1
+      return true
+    } catch (e) { return false }
+  }
+
+  stats() {
+    return { endpoint: WS_URL, connected: this.connected, sent: this.messagesSent, received: this.messagesReceived }
   }
 }
 

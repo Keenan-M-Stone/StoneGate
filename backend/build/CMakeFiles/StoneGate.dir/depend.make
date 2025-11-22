@@ -4,6 +4,7 @@
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/Device.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/DeviceRegistry.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/WebSocketServer.hpp
+CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/core/PhysicsEngine.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/AncillaQubitDevice.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/LN2CoolingControllerDevice.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/LaserControllerDevice.hpp
@@ -13,5 +14,6 @@ CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/QECModuleDevice.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/QuantumRegisterDevice.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/devices/ThermocoupleDevice.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/simulator/SimulatedDevice.hpp
+CMakeFiles/StoneGate.dir/src/main.cpp.o: ../include/simulator/Simulator.hpp
 CMakeFiles/StoneGate.dir/src/main.cpp.o: ../src/main.cpp
 

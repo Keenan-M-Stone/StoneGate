@@ -28,6 +28,11 @@ add_library(core
 target_include_directories(core PUBLIC include)
 
 target_link_libraries(core PRIVATE pthread)
+find_package(Boost REQUIRED COMPONENTS system)
+if(Boost_FOUND)
+    target_include_directories(core PRIVATE ${Boost_INCLUDE_DIRS})
+    target_link_libraries(core PRIVATE Boost::system)
+endif()
 
 # Executable
 add_executable(StoneGate src/main.cpp)

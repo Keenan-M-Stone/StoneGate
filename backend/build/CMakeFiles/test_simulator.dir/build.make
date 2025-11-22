@@ -80,6 +80,7 @@ test_simulator_EXTERNAL_OBJECTS =
 test_simulator: CMakeFiles/test_simulator.dir/src/test_simulator.cpp.o
 test_simulator: CMakeFiles/test_simulator.dir/build.make
 test_simulator: libcore.a
+test_simulator: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
 test_simulator: CMakeFiles/test_simulator.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lemma137/dev/StoneGate/backend/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable test_simulator"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/test_simulator.dir/link.txt --verbose=$(VERBOSE)

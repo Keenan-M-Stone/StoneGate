@@ -80,6 +80,7 @@ phys_engine_citest_EXTERNAL_OBJECTS =
 phys_engine_citest: CMakeFiles/phys_engine_citest.dir/tests/phys_engine_citest.cpp.o
 phys_engine_citest: CMakeFiles/phys_engine_citest.dir/build.make
 phys_engine_citest: libcore.a
+phys_engine_citest: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
 phys_engine_citest: CMakeFiles/phys_engine_citest.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lemma137/dev/StoneGate/backend/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable phys_engine_citest"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/phys_engine_citest.dir/link.txt --verbose=$(VERBOSE)

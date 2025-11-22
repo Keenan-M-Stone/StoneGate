@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Example: tune LN2 until det stable",
+    "steps": [
+      { "action": "set", "device": "ln2", "params": { "flow_rate_Lmin": 2.0 } },
+      { "action": "wait_for_stable", "devices": ["det0"], "metrics": ["temperature","counts"], "tolerance": { "temperature": 0.5, "counts": 5 }, "window_ms": 5000, "consecutive": 3 }
+    ]
+  }
+]

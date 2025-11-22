@@ -80,6 +80,7 @@ simulator_citest_EXTERNAL_OBJECTS =
 simulator_citest: CMakeFiles/simulator_citest.dir/tests/simulator_citest.cpp.o
 simulator_citest: CMakeFiles/simulator_citest.dir/build.make
 simulator_citest: libcore.a
+simulator_citest: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
 simulator_citest: CMakeFiles/simulator_citest.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/lemma137/dev/StoneGate/backend/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable simulator_citest"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/simulator_citest.dir/link.txt --verbose=$(VERBOSE)
