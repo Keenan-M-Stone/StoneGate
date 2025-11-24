@@ -1,6 +1,8 @@
 #include "simulator/Simulator.hpp"
 #include "DeviceRegistry.hpp"
 #include "simulator/SimulatedDevice.hpp"
+#include "devices/ThermocoupleDevice.hpp"
+#include "devices/LN2CoolingControllerDevice.hpp"
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -72,8 +74,18 @@ bool Simulator::load_from_graph(const std::string& deviceGraphPath, DeviceRegist
 
             // create simulated device with provided seed (or 0) and physics hook
             uint64_t device_seed = seed_ ? seed_ + std::hash<std::string>{}(id) : 0;
-            auto dev = std::make_shared<SimulatedDevice>(id, type, props, device_seed, &phys_);
-            registry.register_device(dev);
+            // If concrete backend device classes exist for this type, instantiate them so they can
+            // integrate with the PhysicsEngine (e.g., LN2 controller and Thermocouple).
+            if (type == "Thermocouple") {
+                auto dev = std::make_shared<ThermocoupleDevice>(id, &phys_);
+                registry.register_device(dev);
+            } else if (type == "LN2CoolingController" || type == "LN2CoolingControllerDevice" || type == "ln2_cooling_controller") {
+                auto dev = std::make_shared<LN2CoolingControllerDevice>(id, &phys_);
+                registry.register_device(dev);
+            } else {
+                auto dev = std::make_shared<SimulatedDevice>(id, type, props, device_seed, &phys_);
+                registry.register_device(dev);
+            }
         }
 
         // register edges

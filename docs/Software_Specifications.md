@@ -173,8 +173,42 @@ Each dialog in the frontend should adhere to these guidelines. Dialog titles, pr
 
   - The `run` action for script macros sends control messages over WebSocket (shape: `{"type":"control","cmd":"action","device_id":"<id>","action":{...}}`) and evaluates stability conditions by sampling the `useDeviceStore` values.
 
+**Component Dialog — Detailed Controls**
 
+This section documents the full set of controls and subdialogs available in the device Component Dialog (the dialog opened by double-clicking a schematic node in normal operation mode). It expands the earlier description with exact behaviors and persistence points.
 
+- Plot tab
+  - Realtime trend plot of the selected metric for the device (default metric chosen from available measurements). The plot shows a continuous history over the configured time window and updates at the configured refresh rate.
+  - Plot options: `Grid` (on/off), `Color` (hex picker), `Log X` and `Log Y` toggles. These are stored in the browser `localStorage` and persist across dialog instances.
+  - Time range: numeric input (seconds) to choose how many seconds to display in the plot. Changing the time range immediately updates the visible data and is persisted when the dialog is closed with `OK` in the Settings tab.
+  - Refresh rate: numeric input (Hz) controlling both the plot redraw frequency and the sampling/update cadence for the dialog's derived displays (statistics, back/forward stepping). This value is validated to be in a reasonable range (0.1 Hz — 100 Hz) in the UI.
+  - Pause / Play: when paused, the plot stops redrawing but the history buffer continues to accumulate samples in the background. The pause action captures the current wall-clock timestamp as the 'pause frame'.
+  - Back / Forward: when paused, Back moves the displayed window backwards by approximately one refresh step (i.e., `1/refresh_rate` seconds) up to one full time window backwards; Forward advances toward the last captured frame. When resumed (Play), the display jumps back to live view.
+  - Zero button: sends a `zero` control action to the device (`{"type":"control","cmd":"action","device_id":"<id>","action":{"zero":true}}`). The server acknowledges via control/ack semantics when implemented.
+  - Set button: opens a small JSON editor prompt (or configurable form if schema-driven UI is available) to enter parameter values; on OK, sends `set` control as `{"type":"control","cmd":"action","device_id":"<id>","action":{"set":{...}}}`. Input is validated client-side for syntactic correctness before sending.
+  - Record CSV: opens a small subdialog to enter `duration_seconds` and optional `filename` and `path` (path works as a suggestion for server-side saving; in the browser environment the CSV is downloaded to the client downloads folder). By default the filename is `<device_id>_<ISO timestamp>.csv` and the CSV contains one row per refresh-step with columns for timestamp and each numeric metric.
+
+- Settings tab
+  - OK / Cancel: applies persistent settings (time range, refresh rate, plot color, grid) on OK and discards on Cancel.
+  - Per-device persistence: when OK is selected settings are saved under a localStorage key that includes the device id so different devices can have different default plot parameters.
+
+- Stats tab
+  - Shows computed statistics for the selected window: Mean, Median, Mode, Standard Deviation, and approximate first-derivative (finite-difference mean). These values are recomputed at the refresh rate and are displayed as numeric readouts and small sparklines where space permits.
+  - The tab also exposes an `Export Statistics` button which saves current window statistics as a small JSON blob or CSV line for offline analysis.
+
+- JSON tab
+  - Shows a read-only, scrollable JSON view of the device's current status/measurements and descriptor. This is for advanced inspection — common operations are in the other tabs.
+
+- Record subdialog details
+  - The Record subdialog allows specifying `duration_seconds` and a storage method: `Download` (browser download), or `Server` (POST to backend `/api/recordings` endpoint — only available when backend supports it). When `Server` is chosen the dialog requests a `path` on the server where to save and returns an upload acknowledgement from the server; the server is responsible for writing the CSV and returning a URL or path.
+  - The CSV file includes a timestamp column (ISO8601) and numeric columns for every metric produced by the device at each sample. Non-numeric measurements are left empty.
+
+- Control safety and confirmations
+  - For controls that could create unsafe states (e.g., setting flow rates above `specs.max_flow_rate`), the dialog displays a confirmation modal explaining the risk and requiring the user to type a confirm string (e.g., the device id) before sending the command.
+
+Implementation notes
+- The dialog uses the client-side `History` store (in-memory circular buffer) for plotting and statistics; the backend continues to collect live samples regardless of whether the dialog is open (the graph only displays what is available in the history buffer). The default buffer length supports multiple minutes of samples at modest refresh rates; this can be increased if desired.
+- The `zero` and `set` controls emit WebSocket control messages. The backend should implement `handle_control` to apply these to either simulated devices or actual drivers. For the LN2 controller, the device implementation echoes setpoints and updates the PhysicsEngine controller state immediately so downstream simulated devices (e.g., thermocouples) will reflect the change.
 ## Acceptable UI entries and validation rules
 
 This section enumerates, per control type, the allowed formats and acceptable ranges.

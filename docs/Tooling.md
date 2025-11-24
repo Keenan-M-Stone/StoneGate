@@ -1,7 +1,6 @@
-````markdown
-# Tools README
+# Tooling (Tools README)
 
-This folder contains small developer utilities and examples for working with the StoneGate project. 
+The `tools` directory contains small developer utilities and examples for working with the StoneGate project. 
 The primary example here is `qec_client`, a minimal C++ client that demonstrates submitting a QEC job to the development Flask stub (`backend/qec_stub.py`), polling status, and fetching results.
 
 **Prerequisites**
@@ -105,4 +104,3 @@ stderr_logfile=/tmp/qec_stub.err
 
 If you want, I can add the `supervisord` file to `tools/` or create a tiny integration script that runs the stub, waits for health, then runs the client and prints the result. Which would you prefer?
 
-````

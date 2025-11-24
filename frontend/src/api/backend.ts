@@ -1,5 +1,6 @@
 import type { StatusUpdateMessage } from '../../../shared/protocol/MessageTypes'
 import { useDeviceStore } from '../state/store'
+import History from '../state/history'
 
 const WS_URL = (import.meta.env.VITE_BACKEND_WS_URL as string) ?? 'ws://localhost:8080/status'
 
@@ -33,6 +34,13 @@ class BackendClient {
                 measurements: u.measurement?.measurements ?? {}
               }
               store.upsertDevice(device)
+              // capture numeric samples into history
+              const numeric: Record<string, number | null> = {}
+              for (const k of Object.keys(device.measurements || {})){
+                const m = (device.measurements as any)[k]
+                numeric[k] = (m && typeof m.value === 'number') ? m.value : null
+              }
+              History.addSample(u.id, numeric)
             } catch (e) {
               console.error('Failed to apply update entry', e)
             }
@@ -40,6 +48,12 @@ class BackendClient {
         } else {
           const msg: StatusUpdateMessage = raw
           store.upsertDevice(msg)
+          const numeric: Record<string, number | null> = {}
+          for (const k of Object.keys(msg.measurements || {})){
+            const m = (msg as any).measurements[k]
+            numeric[k] = (m && typeof m.value === 'number') ? m.value : null
+          }
+          History.addSample(msg.device_id, numeric)
         }
       } catch (e) {
         console.error('Invalid message', e)

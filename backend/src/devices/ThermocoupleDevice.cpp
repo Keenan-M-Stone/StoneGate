@@ -1,7 +1,7 @@
 #include "devices/ThermocoupleDevice.hpp"
 
-ThermocoupleDevice::ThermocoupleDevice(std::string id)
-: dev_id(id), offset(0.0), noise(0.0, 0.02) {}
+ThermocoupleDevice::ThermocoupleDevice(std::string id, PhysicsEngine* physics)
+: dev_id(id), offset(0.0), rng(std::random_device{}()), noise(0.0, 0.02), physics(physics) {}
 
 std::string ThermocoupleDevice::id() const { return dev_id; }
 std::string ThermocoupleDevice::type() const { return "thermocouple"; }
@@ -21,9 +21,19 @@ nlohmann::json ThermocoupleDevice::descriptor() const {
 }
 
 nlohmann::json ThermocoupleDevice::read_measurement() {
-    double T = 300.0 + offset + noise(rng);
+    double T_C = 27.0 + offset + noise(rng);
+    // if physics engine is present and has a computed temperature (in K), use it
+    if (physics) {
+        try {
+            auto state = physics->get_cached_step();
+            if (state.contains(dev_id) && state[dev_id].contains("temperature_K")) {
+                double Tk = state[dev_id]["temperature_K"].get<double>();
+                T_C = Tk - 273.15 + offset;
+            }
+        } catch(...){}
+    }
     return {
-        {"temperature_C", T}
+        {"temperature_C", T_C}
     };
 }
 

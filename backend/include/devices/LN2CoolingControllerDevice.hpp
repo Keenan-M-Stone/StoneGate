@@ -2,6 +2,9 @@
 #include "Device.hpp"
 #include <random>
 
+// forward
+class PhysicsEngine;
+
 /**
  * @brief Liquid Nitrogen Cooling Controller device (real or simulated).
  *
@@ -9,7 +12,7 @@
  */
 class LN2CoolingControllerDevice : public Device {
 public:
-    LN2CoolingControllerDevice(std::string id);
+    LN2CoolingControllerDevice(std::string id, core::PhysicsEngine* physics = nullptr);
     std::string id() const override;
     std::string type() const override;
     nlohmann::json descriptor() const override;
@@ -20,4 +23,5 @@ private:
     double setpoint_K;
     double flow_rate;
     std::default_random_engine rng;
+    core::PhysicsEngine* physics;
 };

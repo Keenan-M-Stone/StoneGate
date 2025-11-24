@@ -2,9 +2,12 @@
 #include "Device.hpp"
 #include <random>
 
+// forward
+class PhysicsEngine;
+
 class ThermocoupleDevice : public Device {
 public:
-    ThermocoupleDevice(std::string id);
+    ThermocoupleDevice(std::string id, core::PhysicsEngine* physics = nullptr);
 
     std::string id() const override;
     std::string type() const override;
@@ -16,5 +19,6 @@ private:
     std::string dev_id;
     double offset;
     std::default_random_engine rng;
+    core::PhysicsEngine* physics;
     std::normal_distribution<double> noise;
 };

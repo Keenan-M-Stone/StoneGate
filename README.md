@@ -140,26 +140,28 @@ quantum-monitor/
 
 ---
 
-#### Quick tree generator (bash alias) - For developers
+#### Developer's Note: Quick tree generator (bash alias)
 
-Below is a small bash function you can add to your shell aliases (e.g., in `~/.bashrc`) to print a compact project tree similar to the block above. It uses Python's stdlib so it doesn't require `tree` to be installed:
+Below is a small bash function you can add to your shell aliases (e.g., in `~/.bashrc`) to print a 
+compact project tree similar to the block above.  
 
+It uses Python's `stdlib` so it doesn't require `tree` to be installed:  
 ```bash
 treeproj() {
   python3 - <<'PY'
 import os
 def tree(path, prefix=''):
-	try:
-		entries = sorted([e for e in os.listdir(path) if not e.startswith('.')])
-	except PermissionError:
-		return
-	for i, name in enumerate(entries):
-		p = os.path.join(path, name)
-		connector = '└── ' if i == len(entries)-1 else '├── '
-		print(prefix + connector + name)
-		if os.path.isdir(p):
-			extension = '    ' if i == len(entries)-1 else '│   '
-			tree(p, prefix + extension)
+    try:
+        entries = sorted([e for e in os.listdir(path) if not e.startswith('.')])
+    except PermissionError:
+        return
+    for i, name in enumerate(entries):
+        p = os.path.join(path, name)
+        connector = '└── ' if i == len(entries)-1 else '├── '
+        print(prefix + connector + name)
+        if os.path.isdir(p):
+            extension = '    ' if i == len(entries)-1 else '│   '
+            tree(p, prefix + extension)
 
 print('.')
 tree('.')
@@ -174,11 +176,22 @@ PY
 
 ## High-level design notes
 
-- **Backend (C++):** modular libraries separated into `diagnostic`, `results`, `reception`, `demo`. Each subsystem exposes abstract interfaces (`IDevice`, `IMeasurementSource`, `IReceiver`) so hardware-specific drivers can be plugged in.
+- **Backend (C++):** modular libraries separated into `diagnostic`, `results`, `reception`, `demo`.  
+  Each subsystem exposes abstract interfaces (`IDevice`, `IMeasurementSource`, `IReceiver`) so hardware-specific drivers can be plugged in.
 - **State cache:** thread-safe in-memory cache containing latest measurements, device metadata (tolerances, baseline), operation state, and logs.
-- **Networking:** lightweight WebSocket server to communicate with browser frontend. Protocol uses JSON messages (well-typed) and supports streaming telemetry and command/response semantics.
-- **Frontend (React + TypeScript):** UI components for Transmission (send scripts / sequences), Reception (receive backend state), Diagnostics (show sensors, tolerances, zeroing), CircuitEditor (interactive quantum-circuit editor skeleton). The frontend determines error-correction choices by analyzing pre/post diagnostics and operation metadata (a placeholder strategy included).
-- **Demo subsystem:** software-only simulator to generate synthetic qubit outputs and sensor noise to exercise the pipeline.
+- **Networking:** lightweight WebSocket server to communicate with browser frontend.  
+  Protocol uses JSON messages (well-typed) and supports streaming telemetry and command/response semantics.
+- **Frontend (React + TypeScript):**  
+  The frontend determines error-correction choices by analyzing pre/post diagnostics and operation metadata (a placeholder strategy included).  
+  UI components for:  
+  - Transmission (send scripts / sequences),  
+  - Reception (receive backend state),  
+  - Diagnostics (show sensors, tolerances, zeroing),  
+  - CircuitEditor (interactive quantum-circuit editor skeleton).  
+- **Demo subsystem:** software-only simulator to generate:
+  - Synthetic qubit outputs,
+  - Semi-realistic modeling of physical hardware components,
+  - Sensor noise to exercise the pipeline.
 
 ---
 
@@ -186,172 +199,174 @@ PY
 
 ### Backend (Linux / WSL / macOS)
 
-Requires: C++17/C++20 compiler (GCC 10+/Clang 11+/MSVC 2019+), CMake >= 3.16, and a websocket library (the codebase references WebSocket++ or Boost.Beast; the provided skeleton uses a lightweight ASIO-based placeholder).
+Requires: C++17/C++20 compiler (GCC 10+/Clang 11+/MSVC 2019+), CMake >= 3.16, and a websocket library
+(the codebase references WebSocket++ or Boost.Beast; the provided skeleton uses a lightweight ASIO-based placeholder).
 
 Below are step-by-step instructions for common developer and operator flows.
 
 1) Start backend in Simulator Mode (recommended for frontend/dev)
 
-```bash
-cd backend
-mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-cmake --build . -- -j$(nproc)
-# start in simulator mode (auto-loads shared/protocol/DeviceGraph.json)
-./StoneGate --sim
-```
+    ```bash
+    cd backend
+    mkdir -p build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Debug
+    cmake --build . -- -j$(nproc)
+    # start in simulator mode (auto-loads shared/protocol/DeviceGraph.json)
+    ./StoneGate --sim
+    ```
 
-Notes:
-- Simulator mode auto-loads `shared/protocol/DeviceGraph.json` and `shared/protocol/ComponentSchema.json`.
-- The `PhysicsEngine` computes derived properties (temperature, noise coeff) from controller states; `SimulatedDevice` consults the engine when producing measurements.
-- To produce deterministic outputs for debugging, use the `test_simulator` binary with a fixed seed (see "Unit tests" below).
+    Notes:
+    - Simulator mode auto-loads `shared/protocol/DeviceGraph.json` and `shared/protocol/ComponentSchema.json`.
+    - The `PhysicsEngine` computes derived properties (temperature, noise coeff) from controller states;  
+        `SimulatedDevice` consults the engine when producing measurements.
+    - To produce deterministic outputs for debugging, use the `test_simulator` binary with a fixed seed (see "Unit tests" below).
 
-2) Start backend against real instruments (hardware mode)
+1) Start backend against real instruments (hardware mode).  
+    Prerequisites:
+    - Install required device drivers / vendor SDKs and verify hardware visibility (lsusb, ip link, etc.).
+    - Edit `shared/protocol/DeviceGraph.json` so nodes map to real device identifiers and parts in `PartsLibrary.json` or `shared/protocol/user_parts.json`.
+    - Ensure `backend` process can read/write `shared/protocol` (for device overrides and user parts persistence).
+    Start the backend in hardware mode:
 
-Prerequisites:
-- Install required device drivers / vendor SDKs and verify hardware visibility (lsusb, ip link, etc.).
-- Edit `shared/protocol/DeviceGraph.json` so nodes map to real device identifiers and parts in `PartsLibrary.json` or `shared/protocol/user_parts.json`.
-- Ensure `backend` process can read/write `shared/protocol` (for device overrides and user parts persistence).
+    ```bash
+    cd backend/build
+    ./StoneGate
+    # or with explicit port: ./StoneGate 9001
+    ```
 
-Start the backend in hardware mode:
+    Notes:
+    - In hardware mode the backend will attempt to instantiate real device driver classes (registered in `main.cpp`).  
+      If a driver initialization fails, check system permissions, device paths, and driver logs.
+    - Use the frontend Manual Control dialog (or the stdin control hook in `main.cpp` during development) to send control messages.
 
-```bash
-cd backend/build
-./StoneGate
-# or with explicit port: ./StoneGate 9001
-```
+1) Unit tests and CI-less tests
 
-Notes:
-- In hardware mode the backend will attempt to instantiate real device driver classes (registered in `main.cpp`). If a driver initialization fails, check system permissions, device paths, and driver logs.
-- Use the frontend Manual Control dialog (or the stdin control hook in `main.cpp` during development) to send control messages.
+    Build and run the CI-less tests (recommended; no GoogleTest dependency required):
 
-3) Unit tests and CI-less tests
+    ```bash
+    cd backend && mkdir -p build && cd build
+    cmake .. -DCMAKE_BUILD_TYPE=Debug
+    cmake --build . -- -j$(nproc)
+    ./phys_engine_citest
+    ./devices_citest
+    ./simulator_citest
+    ```
 
-Build and run the CI-less tests (recommended; no GoogleTest dependency required):
+    Notes on GoogleTest:
+    - To enable GoogleTest-based tests, configure `cmake` with `-DBUILD_TESTS=ON` and ensure a compatible GTest build is available.
+    - If you see undefined references to a prebuilt `libgtest`, prefer building GTest from source for ABI compatibility.
 
-```bash
-cd backend && mkdir -p build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-cmake --build . -- -j$(nproc)
-./phys_engine_citest
-./devices_citest
-./simulator_citest
-```
+1) Using the QEC service (Python stub) from Python or C++
 
-Notes on GoogleTest:
-- To enable GoogleTest-based tests, configure `cmake` with `-DBUILD_TESTS=ON` and ensure a compatible GTest build is available; if you see undefined references to a prebuilt `libgtest`, prefer building GTest from source for ABI compatibility.
+    Start the QEC development stub (Python + Flask):
 
-4) Using the QEC service (Python stub) from Python or C++
+    ```bash
+    cd backend
+    python3 -m pip install --user flask jsonschema
+    python3 qec_stub.py
+    ```
 
-Start the QEC development stub (Python + Flask):
+    The stub provides these endpoints:
 
-```bash
-cd backend
-python3 -m pip install --user flask jsonschema
-python3 qec_stub.py
-```
+    - `POST /api/qec/submit` — submit a QEC job (request follows `shared/protocol/QECRequest.json`).
+    - `GET /api/qec/status/<job_id>` — check job status.
+    - `GET /api/qec/result/<job_id>` — fetch job result.
 
-The stub provides these endpoints:
+    Python example (submit and poll):
 
-- `POST /api/qec/submit` — submit a QEC job (request follows `shared/protocol/QECRequest.json`).
-- `GET /api/qec/status/<job_id>` — check job status.
-- `GET /api/qec/result/<job_id>` — fetch job result.
+    ```python
+    import requests
+    QEC_URL = 'http://localhost:5001'
+    payload = {
+        'code': 'repetition',
+        'measurements': [{'qubit':0,'basis':'Z','round':0,'value':1}]
+    }
+    resp = requests.post(f"{QEC_URL}/api/qec/submit", json=payload)
+    job_id = resp.json()['job_id']
+    print(requests.get(f"{QEC_URL}/api/qec/status/{job_id}").json())
+    print(requests.get(f"{QEC_URL}/api/qec/result/{job_id}").json())
+    ```
 
-Python example (submit and poll):
+    C++ example (curl/libcurl):
 
-```python
-import requests
-QEC_URL = 'http://localhost:5001'
-payload = {
-	'code': 'repetition',
-	'measurements': [{'qubit':0,'basis':'Z','round':0,'value':1}]
-}
-resp = requests.post(f"{QEC_URL}/api/qec/submit", json=payload)
-job_id = resp.json()['job_id']
-print(requests.get(f"{QEC_URL}/api/qec/status/{job_id}").json())
-print(requests.get(f"{QEC_URL}/api/qec/result/{job_id}").json())
-```
+    ```bash
+    curl -X POST http://localhost:5001/api/qec/submit -H 'Content-Type: application/json' -d '{"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]}'
+    ```
 
-C++ example (curl/libcurl):
+    C++ libcurl example (submit QEC job and print response):
 
-```bash
-curl -X POST http://localhost:5001/api/qec/submit -H 'Content-Type: application/json' -d '{"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]}'
-```
+    ```cpp
+    #include <curl/curl.h>
+    #include <string>
+    #include <iostream>
 
-C++ libcurl example (submit QEC job and print response):
+    static size_t write_cb(void* ptr, size_t size, size_t nmemb, void* userdata) {
+        std::string* resp = static_cast<std::string*>(userdata);
+        resp->append(static_cast<char*>(ptr), size * nmemb);
+        return size * nmemb;
+    }
 
-```cpp
-#include <curl/curl.h>
-#include <string>
-#include <iostream>
+    int main() {
+        CURL* curl = curl_easy_init();
+        if (!curl) { std::cerr << "Failed to init curl" << std::endl; return 1; }
 
-static size_t write_cb(void* ptr, size_t size, size_t nmemb, void* userdata) {
-	std::string* resp = static_cast<std::string*>(userdata);
-	resp->append(static_cast<char*>(ptr), size * nmemb);
-	return size * nmemb;
-}
+        std::string payload = R"({"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]})";
+        std::string response;
 
-int main() {
-	CURL* curl = curl_easy_init();
-	if (!curl) { std::cerr << "Failed to init curl" << std::endl; return 1; }
+        struct curl_slist* headers = nullptr;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
 
-	std::string payload = R"({"code":"repetition","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]})";
-	std::string response;
+        curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:5001/api/qec/submit");
+        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(payload.size()));
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
 
-	struct curl_slist* headers = nullptr;
-	headers = curl_slist_append(headers, "Content-Type: application/json");
+        CURLcode res = curl_easy_perform(curl);
+        if (res != CURLE_OK) {
+            std::cerr << "curl failed: " << curl_easy_strerror(res) << std::endl;
+        } else {
+            std::cout << "Response: " << response << std::endl;
+        }
 
-	curl_easy_setopt(curl, CURLOPT_URL, "http://localhost:5001/api/qec/submit");
-	curl_easy_setopt(curl, CURLOPT_POST, 1L);
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
-	curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(payload.size()));
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        return (res == CURLE_OK) ? 0 : 1;
+    }
+    ```
 
-	CURLcode res = curl_easy_perform(curl);
-	if (res != CURLE_OK) {
-		std::cerr << "curl failed: " << curl_easy_strerror(res) << std::endl;
-	} else {
-		std::cout << "Response: " << response << std::endl;
-	}
+    Build (example):
 
-	curl_slist_free_all(headers);
-	curl_easy_cleanup(curl);
-	return (res == CURLE_OK) ? 0 : 1;
-}
-```
+    ```bash
+    g++ -std=c++17 -O2 -o qec_client qec_client.cpp -lcurl
+    # or if pkg-config is available:
+    # g++ -std=c++17 -O2 -o qec_client qec_client.cpp $(pkg-config --cflags --libs libcurl)
+    ```
 
-Build (example):
+    Management endpoints (parts & overrides):
 
-```bash
-g++ -std=c++17 -O2 -o qec_client qec_client.cpp -lcurl
-# or if pkg-config is available:
-# g++ -std=c++17 -O2 -o qec_client qec_client.cpp $(pkg-config --cflags --libs libcurl)
-```
+    - `GET /api/parts` — merged builtin + user parts (user parts override builtin names).
+    - `POST /api/parts/save` — save a user part (use `save_as_new`/`new_name` to avoid overwriting builtin parts).
+    - `POST /api/parts/reset` — delete a user part by name.
+    - `GET /api/device_overrides` — list per-device overrides.
+    - `POST /api/device_overrides/save` — save per-device override.
+    - `POST /api/device_overrides/reset` — reset per-device override.
+    - `POST /api/device_overrides/reload` — touch/reload overrides file (useful to trigger backend re-read).
 
-Management endpoints (parts & overrides):
+1) Supported quantum computation / QEC functions (prototype)
 
-- `GET /api/parts` — merged builtin + user parts (user parts override builtin names).
-- `POST /api/parts/save` — save a user part (use `save_as_new`/`new_name` to avoid overwriting builtin parts).
-- `POST /api/parts/reset` — delete a user part by name.
-- `GET /api/device_overrides` — list per-device overrides.
-- `POST /api/device_overrides/save` — save per-device override.
-- `POST /api/device_overrides/reset` — reset per-device override.
-- `POST /api/device_overrides/reload` — touch/reload overrides file (useful to trigger backend re-read).
+    This repository currently includes prototype QEC and decision utilities; supported/demo capabilities:
 
-5) Supported quantum computation / QEC functions (prototype)
+    - Repetition code (majority voting) — implemented as a simple decoder in the Python QEC stub.
+    - Surface-code interface (stub) — the framework supports plugging in a real decoder implementation or external decoder service.
+    - QEC job lifecycle APIs (submit / status / result) for integrating external decoder services.
+    - Example heuristic mapping utilities (frontend): map device noise metrics (temperature, noise_coeff, photon loss) to decoder choices and parameters.
 
-This repository currently includes prototype QEC and decision utilities; supported/demo capabilities:
+    To integrate a real decoder, implement a decoder service that consumes `QECRequest.json` and returns `QECResult.json`, and point the frontend or backend to that service (or extend `qec_stub.py`).
 
-- Repetition code (majority voting) — implemented as a simple decoder in the Python QEC stub.
-- Surface-code interface (stub) — the framework supports plugging in a real decoder implementation or external decoder service.
-- QEC job lifecycle APIs (submit / status / result) for integrating external decoder services.
-- Example heuristic mapping utilities (frontend): map device noise metrics (temperature, noise_coeff, photon loss) to decoder choices and parameters.
-
-To integrate a real decoder, implement a decoder service that consumes `QECRequest.json` and returns `QECResult.json`, and point the frontend or backend to that service (or extend `qec_stub.py`).
-
-### Frontend
+### Frontend (Vite/React/NodeJS)
 
 ```bash
 cd frontend
@@ -359,7 +374,7 @@ pnpm install   # or npm install
 pnpm dev       # or npm run dev
 ```
 
-Navigate to http://localhost:3000 — the frontend will connect to ws://localhost:9001 by default.
+Navigate to `http://localhost:3000` — the frontend will connect to `ws://localhost:9001` by default.
 
 ---
 
@@ -367,50 +382,60 @@ Navigate to http://localhost:3000 — the frontend will connect to ws://localhos
 
 To add a new device (real or simulated):
 
-1. **Backend (C++):**
-	- Create a new class inheriting from `Device` (see `PhotonicDetectorDevice` for an example).
-	- Implement all required methods: `id()`, `type()`, `descriptor()`, `read_measurement()`, `perform_action()`.
-	- Register your device in `main.cpp` or via the `Simulator` loader.
-	- For simulation, add your type and properties to `shared/protocol/ComponentSchema.json`.
-	- For hardware, implement a driver class and call it from your device.
+1. **Backend:**
+    - Create a new class inheriting from `Device` (see `PhotonicDetectorDevice` for an example).
+    - Implement all required methods: `id()`, `type()`, `descriptor()`, `read_measurement()`, `perform_action()`.
+    - Register your device in `main.cpp` or via the `Simulator` loader.
+    - For simulation, add your type and properties to `shared/protocol/ComponentSchema.json`.
+    - For hardware, implement a driver class and call it from your device.
 
 2. **Simulator:**
-	- Add your device type and properties to `ComponentSchema.json`.
-	- The simulator will auto-load and generate measurements for all properties.
-	- For custom simulation logic, extend `SimulatedDevice::read_measurement()`.
+    - Add your device type and properties to `ComponentSchema.json`.
+    - The simulator will auto-load and generate measurements for all properties.
+    - For custom simulation logic, extend `SimulatedDevice::read_measurement()`.
 
 3. **Frontend:**
-	- Update UI components if you want custom display/controls for your device type.
-	- The default schematic and device panels will show all properties and allow actions defined in the schema.
+    - Update UI components if you want custom display/controls for your device type.
+    - The default schematic and device panels will show all properties and allow actions defined in the schema.
 
 4. **Testing:**
-	- Add a test in `test_simulator.cpp` to verify your device loads and produces expected output.
+    - Add a test in `test_simulator.cpp` to verify your device loads and produces expected output.
 
 See `Device.hpp` and `SimulatedDevice.cpp` for more documentation and extension points.
 
 ## Build Mode, Swappable Parts, and Physical Coupling
 
-We support a "build mode" concept and a parts-library driven simulation so users can swap parts and see realistic physical coupling (e.g., LN2 flow -> temperature -> noise).
+_More precisely described in `docs/Software_Specifications.md`. This is just to serve as a quick reference._
+
+We support a "build mode" concept and a parts-library driven simulation so users can swap parts
+and see realistic physical coupling (e.g., LN2 flow -> temperature -> noise).
 
 How it works (high level):
 
 - `shared/protocol/PartsLibrary.json` contains parts and their specs (thermal conductance, noise coefficients, nominal values).
-- `shared/protocol/DeviceGraph.json` nodes may optionally include a `part` field which names an entry in the parts library; otherwise the simulator picks a default part matching the node `type`.
-- The `Simulator` now registers devices and a `PhysicsEngine` that computes derived values (temperature, noise coefficients) from controller states (e.g., `flow_rate_Lmin`).
-- `SimulatedDevice::read_measurement()` will be extended to consult the physics engine and apply controller-influenced properties when available.
+- `shared/protocol/DeviceGraph.json` nodes may optionally include a `part` field which names an entry in the parts library;
+  otherwise the simulator picks a default part matching the node `type`.
+- The `Simulator` now registers devices and a `PhysicsEngine` that computes derived values
+  (temperature, noise coefficients) from controller states (e.g., `flow_rate_Lmin`).
+- `SimulatedDevice::read_measurement()` will be extended to consult the physics engine
+  and apply controller-influenced properties when available.
 
 Build mode UX suggestions (to implement in frontend):
 
 - Enter build mode from the schematic to add/remove parts, drag/drop part versions onto nodes, and wire connections.
 - When editing a default (built-in) part, the frontend should prompt to "Save as new part" to avoid overwriting stock parts.
-- Allow mapping of readings to controls and to QEC inputs (e.g., map thermocouple temperature -> LN2 setpoint control loop, or map detector counts -> syndrome input).
-- Allow specifying capture windows, tolerances, and sampling rates per device; store these as per-device overrides in the `DeviceGraph` or a separate `UserOverrides.json`.
+- Allow mapping of readings to controls and to QEC inputs  
+  (e.g., map thermocouple temperature -> LN2 setpoint control loop, or map detector counts -> syndrome input).
+- Allow specifying capture windows, tolerances, and sampling rates per device;
+  store these as per-device overrides in the `DeviceGraph` or a separate `UserOverrides.json`.
 
 Persistence & safety:
 
-- Default parts (in `PartsLibrary.json`) are read-only. User-created or modified parts get saved to a user library (e.g., `parts/user_parts.json`).
+- Default parts (in `PartsLibrary.json`) are read-only. 
+  User-created or modified parts get saved to a user library (e.g., `parts/user_parts.json`).
 - Device instances in the `DeviceGraph` may include `overrides` that are persisted separately so the canonical graph remains intact.
 
+<!-->
 Next steps to complete this feature:
 
 1. Extend `SimulatedDevice` to accept a `PhysicsEngine&` and query per-node computed properties each measurement.
@@ -418,7 +443,7 @@ Next steps to complete this feature:
 3. Build frontend build-mode UI: part browser (from `PartsLibrary` + user parts), drag/drop, wiring to signals/controls.
 4. Add persistence endpoints or file-based saves for user parts and overrides.
 
-If you'd like, I can implement steps 1 and 4 next (backend wiring and simple user parts persistence). Which do you prefer I do first?
+<!-->
 
 ### Parts persistence API
 
@@ -430,54 +455,56 @@ The repository includes a small Flask service (`backend/qec_stub.py`) which expo
 Endpoints:
 
 - `GET /api/parts` — returns the merged parts dictionary; user parts override builtin entries when names conflict.
+- `POST /api/parts/save` — save a user part.  
+  Request body JSON:
+  - `{ "name": "MyPart_v1", "spec": { ... } }` — create or update a user part named `MyPart_v1`.
+  - To avoid accidental overwrites of builtin parts, the service requires a save-as-new flow when the supplied `name` matches a builtin part.  
+    Use:  
+    `{ "name": "BuiltinName", "spec": { ... }, "save_as_new": true, "new_name": "MyPart_v1" }`  
+    In that case the user part will be saved under the `new_name` provided.  
+    Response: `{"status":"saved","name":"<saved_name>"}` on success.  
+    
+    Example (create/update user part):
 
-- `POST /api/parts/save` — save a user part. Request body JSON:
+    ```bash
+    curl -X POST http://localhost:5001/api/parts/save \
+        -H 'Content-Type: application/json' \
+        -d '{"name":"MyPart_v1","spec":{"setpoint_default":4.2,"noise_coeff":0.02}}'
+    ```
 
-	- `{ "name": "MyPart_v1", "spec": { ... } }` — create or update a user part named `MyPart_v1`.
-	- To avoid accidental overwrites of builtin parts, the service requires a save-as-new flow when the supplied `name` matches a builtin part. Use:
+    Example (save-as-new to avoid overwriting builtin):
 
-		`{ "name": "BuiltinName", "spec": { ... }, "save_as_new": true, "new_name": "MyPart_v1" }`
-
-		In that case the user part will be saved under the `new_name` provided.
-
-	- Response: `{"status":"saved","name":"<saved_name>"}` on success.
-
-	Example (create/update user part):
-
-	```bash
-	curl -X POST http://localhost:5001/api/parts/save \
-		-H 'Content-Type: application/json' \
-		-d '{"name":"MyPart_v1","spec":{"setpoint_default":4.2,"noise_coeff":0.02}}'
-	```
-
-	Example (save-as-new to avoid overwriting builtin):
-
-	```bash
-	curl -X POST http://localhost:5001/api/parts/save \
-		-H 'Content-Type: application/json' \
-		-d '{"name":"BuiltinPart","spec":{...},"save_as_new":true,"new_name":"BuiltinPart_custom_v1"}'
-	```
+    ```bash
+    curl -X POST http://localhost:5001/api/parts/save \
+        -H 'Content-Type: application/json' \
+        -d '{"name":"BuiltinPart","spec":{...},"save_as_new":true,"new_name":"BuiltinPart_custom_v1"}'
+    ```
 
 - `POST /api/parts/reset` — remove a user part by name (revert to builtin if present). Request body: `{ "name": "MyPart_v1" }`.
 
-	Example:
+    Example:
 
-	```bash
-	curl -X POST http://localhost:5001/api/parts/reset \
-		-H 'Content-Type: application/json' \
-		-d '{"name":"MyPart_v1"}'
-	```
+    ```bash
+    curl -X POST http://localhost:5001/api/parts/reset \
+        -H 'Content-Type: application/json' \
+        -d '{"name":"MyPart_v1"}'
+    ```
 
 Notes for frontend implementers:
 
-- When the user edits a builtin part, present a clear "Save as new" flow that asks for a new name; call the API with `save_as_new` and `new_name` to persist the edited copy in `user_parts.json`.
+- When the user edits a builtin part, present a clear "Save as new" flow that asks for a new name;  
+  call the API with `save_as_new` and `new_name` to persist the edited copy in `user_parts.json`.
 - The frontend may call `GET /api/parts` to populate a part browser; merge client-side changes with local state before sending saves to the API.
-- Device-level overrides (per-instance parameter edits) should be stored separately in `shared/protocol/device_overrides.json` via the device overrides endpoints (`/api/device_overrides/*`). These are applied at runtime by the simulator/PhysicsEngine when present.
+- Device-level overrides (per-instance parameter edits) should be stored separately in `shared/protocol/device_overrides.json`
+  via the device overrides endpoints (`/api/device_overrides/*`).  
+  These are applied at runtime by the simulator/PhysicsEngine when present.
 
 ## Controller Support
 
-Controllers (such as liquid nitrogen cooling) are supported just like devices. See `LN2CoolingControllerDevice` for a C++ example. Add your controller to `ComponentSchema.json` and register it in `main.cpp` or via the simulator loader. The simulator and frontend will auto-detect new controllers and expose their properties and actions.
-
+Controllers (such as liquid nitrogen cooling) are supported just like devices.
+See `LN2CoolingControllerDevice` for a C++ example.
+Add your controller to `ComponentSchema.json` and register it in `main.cpp` or via the simulator loader.
+The simulator and frontend will auto-detect new controllers and expose their properties and actions.
 
 ## Quantum Error Correction (QEC) API
 
@@ -501,8 +528,8 @@ Example request (using curl):
 
 ```bash
 curl -X POST http://localhost:5001/api/qec/submit \
-	-H 'Content-Type: application/json' \
-	-d '{"code":"surface","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]}'
+     -H 'Content-Type: application/json' \
+     -d '{"code":"surface","measurements":[{"qubit":0,"basis":"Z","round":0,"value":1}]}'
 ```
 
 ## Important files (selected excerpts)
@@ -511,27 +538,40 @@ curl -X POST http://localhost:5001/api/qec/submit \
 
 In `FrontendReception` after an operation completes, the frontend will:
 
-1. Gather pre-operation sensor baselines and post-operation diagnostics (temperature delta, magnetic fluctuations, photon background change).
+1. Gather pre-operation sensor baselines and post-operation diagnostics
+   (temperature delta, magnetic fluctuations, photon background change).
 2. Compute a noise vector `N` (vector of normalized deltas relative to tolerances).
-3. Use a mapping table of noise patterns -> ECC choices (e.g., high thermal noise -> prefer surface code with higher syndrome sampling; photon bursts -> add majority-vote over repeated measurements). This mapping is configurable and extensible.
-
+3. Use a mapping table of noise patterns -> ECC choices
+   (e.g., high thermal noise -> prefer surface code with higher syndrome sampling;
+   photon bursts -> add majority-vote over repeated measurements).
+   This mapping is configurable and extensible.
 
 ## Developer resources
 
-There is a concise developer quickstart in `docs/DEVELOPER.md` that shows the expected WebSocket message shapes, how the frontend hooks (`onSelectNode`, `onOpenDialog`) connect to the `SchematicCanvas`, and quick steps to run the backend in simulator mode. It also contains guidance on running the Python QEC stub, the C++ example QEC client, and a short discussion about Docker vs native deployment for demos.
+There is a concise developer quickstart in `docs/DEVELOPER.md` that shows the expected WebSocket message shapes,
+how the frontend hooks (`onSelectNode`, `onOpenDialog`) connect to the `SchematicCanvas`,
+and quick steps to run the backend in simulator mode.
+It also contains guidance on running the Python QEC stub, the C++ example QEC client,
+and a short discussion about Docker vs native deployment for demos.
 
-This is left as a decision-engine module (`frontend/src/errordecision.ts`) with pluggable rules — the codebase includes a small example function with a few heuristics.
-
+This is left as a decision-engine module (`frontend/src/errordecision.ts`) with pluggable rules —
+the codebase includes a small example function with a few heuristics.
 
 ---
 
 ## Integration points and where to plug real code
 
-- `IDiagnosticProvider::pollOnce()` — implement drivers that read from hardware SDKs or DAQ libraries (NI-DAQmx, serial, Modbus, gRPC bridges, etc.).
-- WebsocketServer — replace minimal hook with a real server (Boost.Beast, WebSocket++, uWebSockets) that accepts clients and routes JSON messages.
-- `IScriptRunner::runInstruction()` — implement concrete runners that call hardware control code (moving probes, toggling relays, scheduling pulse sequences to an AWG or FPGA).
-- DemoSimulator — extend to simulate quantum gates using a small statevector or density-matrix simulator (e.g., integrate with Eigen for linear algebra). For larger workloads, consider integrating C++ libraries like `qpp` or linking to Python simulators via IPC.
-- Error correction logic — real ECC selection depends heavily on available codes (surface code, repetition code, Bacon-Shor). Plug in libraries or proprietary implementations behind an interface.
+- `IDiagnosticProvider::pollOnce()` — implement drivers that read from hardware SDKs or DAQ libraries
+  (NI-DAQmx, serial, Modbus, gRPC bridges, etc.).
+- WebsocketServer — replace minimal hook with a real server
+  (Boost.Beast, WebSocket++, uWebSockets) that accepts clients and routes JSON messages.
+- `IScriptRunner::runInstruction()` — implement concrete runners that call hardware control code
+   (moving probes, toggling relays, scheduling pulse sequences to an AWG or FPGA).
+- DemoSimulator — extend to simulate quantum gates using a small statevector or density-matrix simulator
+  (e.g., integrate with Eigen for linear algebra).
+  For larger workloads, consider integrating C++ libraries like `qpp` or linking to Python simulators via IPC.
+- Error correction logic — real ECC selection depends heavily on available codes (surface code, repetition code, Bacon-Shor).
+  Plug in libraries or proprietary implementations behind an interface.
 
 ---
 
