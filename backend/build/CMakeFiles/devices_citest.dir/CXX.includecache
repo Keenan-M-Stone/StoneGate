@@ -12,11 +12,33 @@ string
 nlohmann/json.hpp
 -
 
+../include/core/PhysicsEngine.hpp
+string
+-
+unordered_map
+-
+vector
+-
+thread
+-
+mutex
+-
+atomic
+-
+chrono
+-
+nlohmann/json.hpp
+-
+filesystem
+-
+
 ../include/devices/LN2CoolingControllerDevice.hpp
 Device.hpp
 ../include/devices/Device.hpp
 random
 -
+core/PhysicsEngine.hpp
+../include/devices/core/PhysicsEngine.hpp
 
 ../include/devices/PhotonicDetectorDevice.hpp
 Device.hpp
@@ -27,6 +49,8 @@ random
 ../include/devices/ThermocoupleDevice.hpp
 Device.hpp
 ../include/devices/Device.hpp
+core/PhysicsEngine.hpp
+../include/devices/core/PhysicsEngine.hpp
 random
 -
 

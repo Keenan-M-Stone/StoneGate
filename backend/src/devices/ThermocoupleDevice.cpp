@@ -14,7 +14,7 @@ nlohmann::json ThermocoupleDevice::descriptor() const {
         {"specs", {
             {"precision", 0.01},
             {"range", {-200, 500}},
-            {"manufacturer", "Acme Quantum Sensors"},
+            {"manufacturer", "Stone Labs: Quantum Sensors and Measurements Division"},
             {"datasheet_url", "https://example.com/thermocouple"}
         }}
     };

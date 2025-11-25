@@ -1,3 +1,5 @@
+// index.tsx
+
 import React from 'react'
 import { useDeviceStore } from '../../state/store'
 import compSchema from '../../../../shared/protocol/ComponentSchema.json'
@@ -31,7 +33,7 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
   const viewHeight = Math.max(400, Math.ceil((maxY - minY) * spacing + padding*2))
 
   // helper to get node size (defaults)
-  const getNodeSize = (id:string) => nodeSizes[id] ?? { width: 220, height: 140 }
+  const getNodeSize = (id:string) => nodeSizes[id] ?? { width: 200, height: 120 }
 
   const updateNodeSize = (id:string, w:number, h:number) => {
     setNodeSizes(s => ({ ...s, [id]: { width: Math.max(48, Math.round(w)), height: Math.max(32, Math.round(h)) } }))
@@ -65,7 +67,10 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={(e)=>{ e.stopPropagation(); if (onOpenDialog) onOpenDialog(n.id) }}>Inspect</button>
                       <button onClick={(e)=>{ e.stopPropagation(); /* TODO: open Manual Control */ alert('Manual Control not implemented yet') }}>Manual</button>
-                      {buildMode && <button onClick={(e)=>{ e.stopPropagation(); alert('Assign part (drag from Parts Browser)') }}>Assign</button>}
+                      {buildMode && <button onClick={(e)=>{
+                        e.stopPropagation(); 
+                        alert('Assign part (drag from Parts Browser)') }
+                      }>Assign</button>}
                     </div>
                   </div>
                 )}
@@ -87,7 +92,7 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
             </foreignObject>
           )
         })}
-      </g>
+        </g>
       </svg>
     </div>
   )

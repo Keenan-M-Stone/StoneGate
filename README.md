@@ -1,12 +1,16 @@
 # StoneGate: Quantum Architecture Monitoring & Control
 
 **Goals:**  
-- [ ] Provide a working, well-structured skeleton codebase that implements subsystems for controlling quantum architecture: 
+
+- [ ] Provide a working, well-structured skeleton codebase that implements subsystems for controlling quantum architecture:
   - [ ] Backend [`c++`]: diagnostics, results, reception, demo/simulator, state cache;
-  - [ ] Frontend [`vite/React`]: transmission and reception of instructions for backend determined from user interactions, diagnostics UI, display of apparatus components in an editable schematic.
-  - [ ] Quantum Error Correction (QEC) API - utilize system state to better apply appropriate error corrections and interpret commands from script interface for executing quantum computations.
-- [ ] Code focuses on clarity, separation of concerns, testability, and places to plug real drivers / hardware SDKs / error-correction libraries.
-- [ ] Demonstrate to companies that I'm not a poser.
+  - [ ] Frontend [`vite/React`]: transmission and reception of instructions for backend
+        determined from user interactions, diagnostics UI, display of apparatus components in an editable schematic.
+  - [ ] Quantum Error Correction (QEC) API - utilize system state to better apply appropriate
+        error corrections and interpret commands from script interface for executing quantum computations.
+- [ ] Code focuses on clarity, separation of concerns, testability,
+      and places to plug real drivers / hardware SDKs / error-correction libraries.
+- [ ] Demonstrate to companies that _"I can 'river-dance' with the best of 'them'."_
 
 ## Prerequisites
 
@@ -59,19 +63,8 @@ Notes:
 # Optionally specify a custom device graph:
 # ./test_simulator --graph ../../shared/protocol/DeviceGraph.json --seed 123
 ```
+
 This prints the loaded device descriptors and a single measurement poll for all simulated devices. Use a fixed seed for predictable results.
-
----
-
-## Backend Simulator (Node.js, legacy)
-
-For a JS-based backend simulator (for frontend demo/testing):
-
-```bash
-cd backend-sim
-npm install
-npm start
-```
 
 ---
 

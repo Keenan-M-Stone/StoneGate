@@ -1,25 +1,37 @@
 # StoneGate Developer Quickstart
 
-This file is a compact checklist and wiring guide for frontend ↔ backend integration, and for local installation of the backend (C++) and frontend (React + Vite).
+This file is a compact checklist and wiring guide for frontend ↔ backend integration,
+and for local installation of the backend (C++) and frontend (React + Vite).
+
+Developer notes can also be found in the main `README.md` doc for the repository.
 
 ## Wiring the UI to the backend
 
-- WebSocket endpoint (frontend): `VITE_BACKEND_WS_URL` (default: `ws://localhost:9001/status`). The frontend `Backend` client connects to this URL and expects two main message shapes:
+- WebSocket endpoint (frontend): `VITE_BACKEND_WS_URL` (default: `ws://localhost:9001/status`).  
+  The frontend `Backend` client connects to this URL and expects two main message shapes:
+
   - Batch measurement update:
+
     ```json
     { "type": "measurement_update", "updates": [ { "id": "device_id", "measurement": { "measurements": { "metric": { "value": 1.0, "uncertainty": 0.01 } }, "state": "nominal", "ts": 123456789 } }, ... ] }
     ```
+
   - Single device status (legacy):
+
     ```json
     { "device_id": "id", "state": "nominal", "measurements": { "metric": { "value": 1.0, "uncertainty": 0.01 } } }
     ```
 
 - Control messages (sent from frontend to backend over WebSocket):
+  
   - Manual device action:
+  
     ```json
     { "type": "control", "cmd": "action", "device_id": "id", "action": { "set": { "flow_rate_Lmin": 2.5 } } }
     ```
+
   - Macro run request (client delegates macro execution to backend):
+  
     ```json
     { "type": "control", "cmd": "macro_run", "macro_id": "my_macro", "parameters": {} }
     ```
@@ -34,6 +46,7 @@ This file is a compact checklist and wiring guide for frontend ↔ backend integ
 - A `MacroEditor` can persist macros to `localStorage` and optionally submit a `macro_run` control message to backend to delegate execution.
 
 ## Messages summary (quick)
+
 - measurement_update: server -> client, batch of updates
 - control: client -> server, actions & macro orchestration
 - descriptor: server -> client, device descriptors (sent at connect)

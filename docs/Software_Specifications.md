@@ -13,8 +13,8 @@ This document is a reference specification for the StoneGate monitoring and cont
 - `nlohmann::json` header (packaged as `nlohmann-json3-dev` on Debian/Ubuntu) for JSON parsing in C++
 - Python 3 with `flask` (and optionally `jsonschema`) to run the QEC prototype stub
 
+## Contents
 
-**Contents**
 - Overview
 - Dialog behavior (UI)
 - Acceptable UI entries and validation rules
@@ -28,38 +28,53 @@ This document is a reference specification for the StoneGate monitoring and cont
 
 ## Overview
 
-StoneGate is a modular monitoring and control framework for silicon-photonic single-photon-qubit experiments. The software is separated into:
+StoneGate is a modular monitoring and control framework for silicon-photonic single-photon-qubit experiments.  
+The software is separated into:
+
 - Frontend (React): schematic editor, device panels, diagnostics dialogs, build-mode UI
 - Backend (C++): device registry, drivers, simulator, physics engine, WebSocket server
 - QEC service (prototype Flask): QEC job submission and parts/device override management
 
-This specification documents user-facing behavior (dialogs), the allowed inputs and validation rules, the control calculations used by backend and frontend decision logic, and detailed error messages.
+This specification documents user-facing behavior (dialogs), the allowed inputs and validation rules,
+the control calculations used by backend and frontend decision logic, and detailed error messages (Cause/Action).
 
 ## Dialog behavior (UI)
 
 Each dialog in the frontend should adhere to these guidelines. Dialog titles, primary action, cancel action, and expected lifecycle are listed.
 
 1) **Device Properties Dialog**
+
 - Purpose: Inspect and edit per-device parameters (setpoints, tolerances, capture windows).
 - Open: from device node context menu or device panel "Edit Properties" action.
 - Fields displayed:
   - Device ID: read-only string (unique identifier)
   - Device Type: read-only string
-  - Part: dropdown of available parts (builtin + user). Selecting a builtin part will show a small warning: "Editing a builtin part will require Save-As-New to persist changes." (Confirm to continue editing.)
-  - Setpoint: numeric input (units depend on device, e.g., K or C). Must meet `min <= value <= max` per the selected part's `specs.range` or the device default.
+  - Part: dropdown of available parts (builtin + user).  
+    Selecting a builtin part will show a small warning:  
+    "Editing a builtin part will require Save-As-New to persist changes."  
+    (Confirm to continue editing.)
+  - Setpoint: numeric input (units depend on device, e.g., K or C).  
+    Must meet `min <= value <= max` per the selected part's `specs.range` or the device default.
   - Tolerance (absolute or percent): numeric input; backend expects a positive value; UI allows choosing between `absolute` and `percent` mode.
-  - Capture Window: two numeric inputs `start_ms` and `duration_ms`. Start must be >= 0, duration > 0 and <= 1e6 (1e6 ms = 1000s) by default.
-  - Sampling Rate: dropdown or numeric input (Hz); allowed values depend on device capabilities (for simulated devices, see `ComponentSchema.json` properties). By default sampling rate must be in `[1e-4, 1e4]` Hz.
+  - Capture Window: two numeric inputs `start_ms` and `duration_ms`.  
+    Start must be >= 0, duration > 0 and <= 1e6 (1e6 ms = 1000s) by default.
+  - Sampling Rate: dropdown or numeric input (Hz); allowed values depend on device capabilities
+    (for simulated devices, see `ComponentSchema.json` properties).  
+    By default sampling rate must be in `[1e-4, 1e4]` Hz.
   - Advanced: JSON editor for per-device `overrides` (validated by schema `DeviceOverrideSchema.json` on save).
 - Actions:
-  - Save: If editing a builtin part, prompt to Save-As-New. If user agrees and supplies `new_name`, call `/api/parts/save` with `save_as_new=true`.
-  - Cancel: revert changes in UI. A confirmation appears if unsaved edits are present.
-  - Reset to Default: only enabled if a user part exists for the part name or a device override exists; calls `/api/parts/reset` or `/api/device_overrides/reset`.
+  - Save: If editing a builtin part, prompt to Save-As-New.  
+    If user agrees and supplies `new_name`, call `/api/parts/save` with `save_as_new=true`.
+  - Cancel: revert changes in UI.  
+    A confirmation appears if unsaved edits are present.
+  - Reset to Default: only enabled if a user part exists for the part name or a device override exists;
+    calls `/api/parts/reset` or `/api/device_overrides/reset`.
 - Validation rules:
   - Fields must pass client-side validation before enabling `Save`.
-  - The JSON editor must be valid JSON and match the `DeviceOverrideSchema.json` (if available); server-side validation will also run.
+  - The JSON editor must be valid JSON and match the `DeviceOverrideSchema.json` (if available);
+    server-side validation will also run.
 
-2) **Build Mode / Parts Browser Dialog**
+1) **Build Mode / Parts Browser Dialog**
 - Purpose: Browse PartsLibrary and user parts, drag parts onto nodes in the schematic, and create new parts.
 - Behavior:
   - Left pane: part categories + search filter (text contains search across name and specs values).
@@ -68,7 +83,7 @@ Each dialog in the frontend should adhere to these guidelines. Dialog titles, pr
   - Editing a builtin part: opening the part in an editor shows a banner: "Builtin part — to persist edits, use Save As New." The `Save` button is disabled until user toggles `Save as new` and provides a unique name.
   - Persist Graph: writes the `DeviceGraph.json` draft into a workspace copy and optionally sends device override entries via `/api/device_overrides/save`.
 
-3) **Manual Control Dialog**
+1) **Manual Control Dialog**
 - Purpose: Provide direct manual controls for a device (e.g., set LN2 flow_rate, zero sensors, trigger pulse sequences).
 - Behavior:
   - Displays a set of controls mapped from device `actions` (as defined in `ComponentSchema.json`).
@@ -76,7 +91,7 @@ Each dialog in the frontend should adhere to these guidelines. Dialog titles, pr
   - Manual control requests are sent via WebSocket control messages: `{"type":"control","device_id":"<id>","action":{...}}`.
   - The server responds with an acknowledgement message (over WebSocket) with the same `device_id` and a status field `ack: accepted|rejected|error`.
 
-4) **Diagnostics / QEC Submission Dialog**
+1) **Diagnostics / QEC Submission Dialog**
 - Purpose: Select measurement windows and submit data to QEC service.
 - Behavior:
   - User selects devices and time-range (or capture windows) using present measurement history.
@@ -207,7 +222,10 @@ This section documents the full set of controls and subdialogs available in the 
   - For controls that could create unsafe states (e.g., setting flow rates above `specs.max_flow_rate`), the dialog displays a confirmation modal explaining the risk and requiring the user to type a confirm string (e.g., the device id) before sending the command.
 
 Implementation notes
-- The dialog uses the client-side `History` store (in-memory circular buffer) for plotting and statistics; the backend continues to collect live samples regardless of whether the dialog is open (the graph only displays what is available in the history buffer). The default buffer length supports multiple minutes of samples at modest refresh rates; this can be increased if desired.
+- The dialog uses the client-side `History` store (in-memory circular buffer) for plotting and statistics;  
+  the backend continues to collect live samples regardless of whether the dialog is open
+  (the graph only displays what is available in the history buffer).  
+  The default buffer length supports multiple minutes of samples at modest refresh rates; this can be increased if desired.
 - The `zero` and `set` controls emit WebSocket control messages. The backend should implement `handle_control` to apply these to either simulated devices or actual drivers. For the LN2 controller, the device implementation echoes setpoints and updates the PhysicsEngine controller state immediately so downstream simulated devices (e.g., thermocouples) will reflect the change.
 ## Acceptable UI entries and validation rules
 
@@ -335,7 +353,6 @@ General rules:
 
 
 ---
-
 
 ## Citations
 

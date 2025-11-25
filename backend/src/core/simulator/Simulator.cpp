@@ -10,6 +10,7 @@
 #include <chrono>
 
 using nlohmann::json;
+using namespace std;
 
 Simulator::Simulator(uint64_t seed)
 : seed_(seed) {}

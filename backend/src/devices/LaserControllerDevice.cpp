@@ -14,7 +14,7 @@ nlohmann::json LaserControllerDevice::descriptor() const {
         {"specs", {
             {"phase_precision", 0.001},
             {"intensity_precision", 0.01},
-            {"manufacturer", "Photonix Labs"},
+            {"manufacturer", "Stone Labs: Photonix Division"},
             {"datasheet_url", "https://example.com/laser"}
         }}
     };

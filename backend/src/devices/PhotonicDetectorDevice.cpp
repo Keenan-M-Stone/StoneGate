@@ -13,7 +13,7 @@ nlohmann::json PhotonicDetectorDevice::descriptor() const {
         {"status", "ok"},
         {"specs", {
             {"dark_rate", dark_rate},
-            {"manufacturer", "Photonix Labs"},
+            {"manufacturer", "Stone Labs: Photonix Division"},
             {"datasheet_url", "https://example.com/detector"}
         }}
     };

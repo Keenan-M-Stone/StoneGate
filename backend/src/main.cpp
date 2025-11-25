@@ -47,7 +47,8 @@ int main(int argc, char** argv) {
             print_usage(argv[0]);
             return 0;
         }
-        if (a == "--sim" || a == "-s") sim_mode = true;
+        // Default sim port 8080.
+        if (a == "--sim" || a == "-s"){ sim_mode = true; port=8080; }
         if ((a == "--port" || a == "-p") && i+1 < argc) {
             try { port = std::stoi(argv[i+1]); } catch(...) {}
         }
@@ -58,7 +59,7 @@ int main(int argc, char** argv) {
 
     if (sim_mode) {
         // Load simulator graph so device IDs match frontend `DeviceGraph.json`
-        std::string graph_path = "../shared/protocol/DeviceGraph.json";
+        std::string graph_path = "/home/lemma137/dev/StoneGate/shared/protocol/DeviceGraph.json";
         static Simulator* global_sim = nullptr;
         if (!global_sim) global_sim = new Simulator(/*seed=*/0);
         if (!global_sim->load_from_graph(graph_path, registry)) {

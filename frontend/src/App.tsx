@@ -1,3 +1,4 @@
+// App.tsx
 import React from 'react'
 import SchematicCanvas from './components/SchematicCanvas'
 import { useDeviceStore } from './state/store'
@@ -31,9 +32,10 @@ export default function App() {
   return (
     <div style={{ padding: 12, fontFamily: 'Inter, sans-serif' }}>
       <header style={{ marginBottom: 12 }}>
-        <h2>Quantum Control — Diagnostic Schematic</h2>
+        <h2> Stone Gate: Quantum Control - Diagnostic Schematic </h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div>Backend status: <strong>{Backend.connected ? 'Connected' : 'Disconnected'}</strong></div>
+              {/* There's really no harm in just making the port selectable */}
+              <div> Backend status: <strong>{Backend.connected ? 'Connected' : 'Disconnected'}</strong></div>
               <ConnectionPanel />
           </div>
       </header>
@@ -41,7 +43,7 @@ export default function App() {
           <SideMenu buildMode={buildMode} setBuildMode={setBuildMode} showMacro={showMacro} setShowMacro={setShowMacro} />
           {showMacro && <MacroEditor />}
         {dialogOpen && selectedNode && (
-          <div style={{ position: 'fixed', left: '50%', top: '10%', transform: 'translateX(-50%)', zIndex: 80 }}>
+          <div style={{ position: 'relative', left: '50%', top: '10%', transform: 'translateX(-50%)', zIndex: 80 }}>
             <ComponentDialog id={selectedNode} status={devices[selectedNode]} schema={undefined} onClose={() => setDialogOpen(false)} />
           </div>
         )}

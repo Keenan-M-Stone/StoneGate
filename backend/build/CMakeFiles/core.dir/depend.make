@@ -27,6 +27,8 @@ CMakeFiles/core.dir/src/core/simulator/SimulatedDevice.cpp.o: ../src/core/simula
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/Device.hpp
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/DeviceRegistry.hpp
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/core/PhysicsEngine.hpp
+CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/devices/LN2CoolingControllerDevice.hpp
+CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/devices/ThermocoupleDevice.hpp
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/simulator/SimulatedDevice.hpp
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../include/simulator/Simulator.hpp
 CMakeFiles/core.dir/src/core/simulator/Simulator.cpp.o: ../src/core/simulator/Simulator.cpp
@@ -36,6 +38,7 @@ CMakeFiles/core.dir/src/devices/AncillaQubitDevice.cpp.o: ../include/devices/Anc
 CMakeFiles/core.dir/src/devices/AncillaQubitDevice.cpp.o: ../src/devices/AncillaQubitDevice.cpp
 
 CMakeFiles/core.dir/src/devices/LN2CoolingControllerDevice.cpp.o: ../include/Device.hpp
+CMakeFiles/core.dir/src/devices/LN2CoolingControllerDevice.cpp.o: ../include/core/PhysicsEngine.hpp
 CMakeFiles/core.dir/src/devices/LN2CoolingControllerDevice.cpp.o: ../include/devices/LN2CoolingControllerDevice.hpp
 CMakeFiles/core.dir/src/devices/LN2CoolingControllerDevice.cpp.o: ../src/devices/LN2CoolingControllerDevice.cpp
 
@@ -60,6 +63,7 @@ CMakeFiles/core.dir/src/devices/QuantumRegisterDevice.cpp.o: ../include/devices/
 CMakeFiles/core.dir/src/devices/QuantumRegisterDevice.cpp.o: ../src/devices/QuantumRegisterDevice.cpp
 
 CMakeFiles/core.dir/src/devices/ThermocoupleDevice.cpp.o: ../include/Device.hpp
+CMakeFiles/core.dir/src/devices/ThermocoupleDevice.cpp.o: ../include/core/PhysicsEngine.hpp
 CMakeFiles/core.dir/src/devices/ThermocoupleDevice.cpp.o: ../include/devices/ThermocoupleDevice.hpp
 CMakeFiles/core.dir/src/devices/ThermocoupleDevice.cpp.o: ../src/devices/ThermocoupleDevice.cpp
 

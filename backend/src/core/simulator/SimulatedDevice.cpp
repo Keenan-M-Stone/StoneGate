@@ -3,8 +3,13 @@
 #include <chrono>
 #include <random>
 
-SimulatedDevice::SimulatedDevice(const std::string& id, const std::string& type, const std::vector<std::string>& props, uint64_t seed, PhysicsEngine* physics)
-: dev_id(id), dev_type(type), properties(props), physics(physics) {
+SimulatedDevice::SimulatedDevice(
+    const std::string& id,
+    const std::string& type, 
+    const std::vector<std::string>& props, 
+    uint64_t seed,
+    PhysicsEngine* physics
+): dev_id(id), dev_type(type), properties(props), physics(physics) {
     if (seed == 0) {
         rng.seed((unsigned)std::chrono::high_resolution_clock::now().time_since_epoch().count());
     } else {

@@ -1,7 +1,7 @@
 import React from 'react'
 import type { DeviceStatus } from '../../../../shared/protocol/MessageTypes'
 
-export default function ComponentNode({ id, label, type, status, schema, buildMode=false, width=220, height=140, onResize, spacing=1 }:{
+export default function ComponentNode({ id, label, type, status, schema, buildMode=false, width=200, height=140, onResize, spacing=1 }:{
 	id:string, label:string, type:string, status?:DeviceStatus | null, schema?:any,
 	buildMode?:boolean, width?:number, height?:number, onResize?: (w:number,h:number)=>void, spacing?:number
 }){

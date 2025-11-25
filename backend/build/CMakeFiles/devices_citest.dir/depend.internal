@@ -3,6 +3,7 @@
 
 CMakeFiles/devices_citest.dir/tests/devices_citest.cpp.o
  ../include/Device.hpp
+ ../include/core/PhysicsEngine.hpp
  ../include/devices/LN2CoolingControllerDevice.hpp
  ../include/devices/PhotonicDetectorDevice.hpp
  ../include/devices/ThermocoupleDevice.hpp
