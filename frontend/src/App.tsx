@@ -7,7 +7,6 @@ import ConnectionPanel from './components/ConnectionPanel'
 import MacroEditor from './components/MacroEditor'
 import SideMenu from './components/SideMenu'
 import ComponentDialog from './components/SchematicCanvas/dialogs/ComponentDialog'
-import { usePanZoom, PanZoomContainer } from './utils/usePanZoom'
 
 
 export default function App() {
@@ -28,7 +27,8 @@ export default function App() {
 
   const onSelectNode = (id?: string|null) => { setSelectedNode(id??null) }
   const onOpenDialog = (id:string) => { setSelectedNode(id); setDialogOpen(true) }
-  
+
+
   return (
     <div style={{ padding: 12, fontFamily: 'Inter, sans-serif' }}>
       <header style={{ marginBottom: 12 }}>
@@ -39,19 +39,7 @@ export default function App() {
               <ConnectionPanel />
           </div>
       </header>
-      {/* Get dynamic width/height from your computed graph extents */}
-      <PanZoomContainer
-        contentWidth={1200}
-        contentHeight={900}
-      >
-        <SchematicCanvas
-          buildMode={buildMode}
-          onSelectNode={onSelectNode}
-          onOpenDialog={onOpenDialog}
-        />
-      </PanZoomContainer>
-
-
+          <SchematicCanvas buildMode={buildMode} onSelectNode={onSelectNode} onOpenDialog={onOpenDialog} />
           <SideMenu buildMode={buildMode} setBuildMode={setBuildMode} showMacro={showMacro} setShowMacro={setShowMacro} />
           {showMacro && <MacroEditor />}
         {dialogOpen && selectedNode && (

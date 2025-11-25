@@ -6,6 +6,7 @@ import compSchema from '../../../../shared/protocol/ComponentSchema.json'
 import deviceGraph from '../../../../shared/protocol/DeviceGraph.json'
 import ComponentNode from './ComponentNode'
 import Wire from './Wire'
+import { PanZoomContainer } from '../../utils/usePanZoom'
 
 export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenDialog }:{ buildMode?:boolean, onSelectNode?: (id?:string|null)=>void, onOpenDialog?: (id:string)=>void }) {
   const devices = useDeviceStore(s => s.devices)
@@ -39,16 +40,28 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
     setNodeSizes(s => ({ ...s, [id]: { width: Math.max(48, Math.round(w)), height: Math.max(32, Math.round(h)) } }))
   }
 
-  return (
-    <div style={{ background: '#071028', padding: 12, borderRadius: 8, overflow: 'auto' }}>
-      <svg width={viewWidth} height={viewHeight} style={{ display: 'block' }}>
-        <g transform={`translate(${padding - minX*spacing}, ${padding - minY*spacing}) scale(${spacing})`}>
-        {/* wires first */}
+return (
+  <PanZoomContainer
+    style={{
+      width: '100%',
+      height: '70vh',          // enough vertical room; adjust as needed
+      overflow: 'hidden',       // Pan/Zoom should manage movement, not scrollbars
+      background: '#071028',
+      borderRadius: 8,
+    }}
+  >
+    <svg
+      width={viewWidth}
+      height={viewHeight}
+      style={{ display: 'block' }}
+    >
+      <g transform={`translate(${padding + minX }, ${padding - minY})`}>
+    
+        {/* wires */}
         {edges.map((e:any, i:number) => {
           const from = nodes.find((n:any)=>n.id===e.from)
-          const to = nodes.find((n:any)=>n.id===e.to)
+          const to   = nodes.find((n:any)=>n.id===e.to)
           if (!from || !to) return null
-          // pass spacing to the wire so it uses raw coordinates
           return <Wire key={i} from={from} to={to} />
         })}
 
@@ -59,41 +72,52 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
           const size = getNodeSize(n.id)
           const x = n.x - size.width/2
           const y = n.y - size.height/2
+
           return (
             <foreignObject key={n.id} x={x} y={y} width={size.width} height={size.height}>
-              <div style={{ width: '100%', height: '100%', position: 'relative', boxSizing: 'border-box', overflow: 'hidden' }} onClick={() => { handleSelect(n.id) }} onDoubleClick={() => { handleDouble(n.id) }}>
+              <div
+                style={{ width:'100%', height:'100%', position:'relative', boxSizing:'border-box' }}
+                onClick={() => handleSelect(n.id)}
+                onDoubleClick={() => handleDouble(n.id)}
+              >
+
                 {isSelected && (
-                  <div style={{ position: 'absolute', right: 6, top: 6, zIndex: 50 }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={(e)=>{ e.stopPropagation(); if (onOpenDialog) onOpenDialog(n.id) }}>Inspect</button>
-                      <button onClick={(e)=>{ e.stopPropagation(); /* TODO: open Manual Control */ alert('Manual Control not implemented yet') }}>Manual</button>
-                      {buildMode && <button onClick={(e)=>{
-                        e.stopPropagation(); 
-                        alert('Assign part (drag from Parts Browser)') }
-                      }>Assign</button>}
+                  <div style={{ position:'absolute', right:6, top:6, zIndex:50 }}>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <button onClick={(e)=>{ e.stopPropagation(); onOpenDialog?.(n.id) }}>Inspect</button>
+                      <button onClick={(e)=>{ e.stopPropagation(); alert('Manual Control not implemented yet') }}>Manual</button>
+                      {buildMode && (
+                        <button
+                          onClick={(e)=>{
+                            e.stopPropagation();
+                            alert('Assign part (drag from Parts Browser)');
+                          }}
+                        >
+                          Assign
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
-                <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
-                  <ComponentNode
-                    id={n.id}
-                    label={n.label}
-                    type={n.type}
-                    status={status}
-                    schema={(compSchema as any)[n.type]}
-                    buildMode={buildMode}
-                    width={size.width}
-                    height={size.height}
-                    onResize={(w:number,h:number)=> updateNodeSize(n.id, w, h)}
-                    spacing={spacing}
-                  />
-                </div>
+
+                <ComponentNode
+                  id={n.id}
+                  label={n.label}
+                  type={n.type}
+                  status={status}
+                  schema={(compSchema as any)[n.type]}
+                  buildMode={buildMode}
+                  width={size.width}
+                  height={size.height}
+                  onResize={(w:number,h:number)=> updateNodeSize(n.id, w, h)}
+                  spacing={spacing}
+                />
               </div>
             </foreignObject>
           )
         })}
-        </g>
-      </svg>
-    </div>
-  )
+      </g>
+    </svg>
+  </PanZoomContainer>
+)
 }
