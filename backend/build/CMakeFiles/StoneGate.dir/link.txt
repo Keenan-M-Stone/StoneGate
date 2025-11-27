@@ -1,1 +1,0 @@
-/usr/bin/c++  -g   CMakeFiles/StoneGate.dir/src/main.cpp.o  -o StoneGate  libcore.a -lpthread /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0 

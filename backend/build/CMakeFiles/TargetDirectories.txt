@@ -1,8 +1,0 @@
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/rebuild_cache.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/simulator_citest.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/devices_citest.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/phys_engine_citest.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/edit_cache.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/StoneGate.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/test_simulator.dir
-/home/lemma137/dev/StoneGate/backend/build/CMakeFiles/core.dir
