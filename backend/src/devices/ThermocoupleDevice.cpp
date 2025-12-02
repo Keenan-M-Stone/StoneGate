@@ -1,4 +1,5 @@
 #include "devices/ThermocoupleDevice.hpp"
+#include "core/PhysicsEngine.hpp"
 
 ThermocoupleDevice::ThermocoupleDevice(std::string id, PhysicsEngine* physics)
 : dev_id(id), offset(0.0), rng(std::random_device{}()), noise(0.0, 0.02), physics(physics) {}

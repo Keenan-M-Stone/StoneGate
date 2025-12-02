@@ -1,8 +1,8 @@
 #pragma once
 #include <string>
 #include <cstdint>
-#include "core/PhysicsEngine.hpp"
 
+class PhysicsEngine;
 class DeviceRegistry;
 
 class Simulator {

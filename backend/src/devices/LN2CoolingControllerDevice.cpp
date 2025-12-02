@@ -1,4 +1,5 @@
 #include "devices/LN2CoolingControllerDevice.hpp"
+#include "core/PhysicsEngine.hpp"
 
 LN2CoolingControllerDevice::LN2CoolingControllerDevice(std::string id, PhysicsEngine* physics)
 : dev_id(id), setpoint_K(77.0), flow_rate(0.0), rng(std::random_device{}()), physics(physics) {}

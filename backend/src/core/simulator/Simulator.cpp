@@ -1,5 +1,6 @@
 #include "simulator/Simulator.hpp"
 #include "DeviceRegistry.hpp"
+#include "core/PhysicsEngine.hpp"
 #include "simulator/SimulatedDevice.hpp"
 #include "devices/ThermocoupleDevice.hpp"
 #include "devices/LN2CoolingControllerDevice.hpp"

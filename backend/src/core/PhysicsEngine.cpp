@@ -8,6 +8,7 @@
 #include <functional>
 
 using nlohmann::json;
+using namespace std;
 
 PhysicsEngine::PhysicsEngine() {
     // initialize to a well-defined min time to avoid uninitialized comparisons
