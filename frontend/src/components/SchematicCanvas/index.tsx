@@ -54,6 +54,7 @@ return (
       width={viewWidth}
       height={viewHeight}
       style={{ display: 'block' }}
+      onClick={() => handleSelect(null)}
     >
       <g transform={`translate(${padding + minX }, ${padding - minY})`}>
     
@@ -77,8 +78,14 @@ return (
             <foreignObject key={n.id} x={x} y={y} width={size.width} height={size.height}>
               <div
                 style={{ width:'100%', height:'100%', position:'relative', boxSizing:'border-box' }}
-                onClick={() => handleSelect(n.id)}
-                onDoubleClick={() => handleDouble(n.id)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleSelect(n.id)
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  handleSelect(n.id)
+                }}
               >
 
                 {isSelected && (
