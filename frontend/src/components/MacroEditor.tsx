@@ -1045,6 +1045,41 @@ export default function MacroEditor() {
   type ExportChoice = 'selected-json' | 'all-json' | 'python' | 'cpp' | 'notebook'
   const [showExportDialog, setShowExportDialog] = React.useState(false)
   const [exportChoice, setExportChoice] = React.useState<ExportChoice>('python')
+  const [exportDialogStatus, setExportDialogStatus] = React.useState<string>('')
+
+  const exportChoiceStorageKey = 'stonegate_macro_export_choice'
+
+  const setExportChoicePersisted = (choice: ExportChoice) => {
+    setExportChoice(choice)
+    try {
+      localStorage.setItem(exportChoiceStorageKey, choice)
+    } catch {
+      // ignore
+    }
+  }
+
+  const copyTextToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = text
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        ta.style.top = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+        return ok
+      } catch {
+        return false
+      }
+    }
+  }
 
   const [uiDeviceActionDialog, setUiDeviceActionDialog] = React.useState<
     | null
@@ -1102,7 +1137,15 @@ export default function MacroEditor() {
 
   const openExportDialog = () => {
     if (!selectedMacro && macros.length === 0) return
-    if (!selectedMacro) setExportChoice('all-json')
+    setExportDialogStatus('')
+    try {
+      const saved = localStorage.getItem(exportChoiceStorageKey) as ExportChoice | null
+      const allowed: ExportChoice[] = ['selected-json', 'all-json', 'python', 'cpp', 'notebook']
+      if (saved && allowed.includes(saved)) setExportChoice(saved)
+    } catch {
+      // ignore
+    }
+    if (!selectedMacro && exportChoice !== 'all-json') setExportChoice('all-json')
     setShowExportDialog(true)
   }
 
@@ -2075,37 +2118,51 @@ export default function MacroEditor() {
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {selectedMacro && (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="radio" name="export" checked={exportChoice === 'selected-json'} onChange={() => setExportChoice('selected-json')} />
+                  <input type="radio" name="export" checked={exportChoice === 'selected-json'} onChange={() => setExportChoicePersisted('selected-json')} />
                   <span>Selected macro (JSON)</span>
                 </label>
               )}
               {macros.length > 0 && (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="radio" name="export" checked={exportChoice === 'all-json'} onChange={() => setExportChoice('all-json')} />
+                  <input type="radio" name="export" checked={exportChoice === 'all-json'} onChange={() => setExportChoicePersisted('all-json')} />
                   <span>All macros (JSON)</span>
                 </label>
               )}
               {selectedMacro && (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="radio" name="export" checked={exportChoice === 'python'} onChange={() => setExportChoice('python')} />
+                  <input type="radio" name="export" checked={exportChoice === 'python'} onChange={() => setExportChoicePersisted('python')} />
                   <span>Python (.py)</span>
                 </label>
               )}
               {selectedMacro && (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="radio" name="export" checked={exportChoice === 'cpp'} onChange={() => setExportChoice('cpp')} />
+                  <input type="radio" name="export" checked={exportChoice === 'cpp'} onChange={() => setExportChoicePersisted('cpp')} />
                   <span>C++ (.cpp)</span>
                 </label>
               )}
               {selectedMacro && (
                 <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input type="radio" name="export" checked={exportChoice === 'notebook'} onChange={() => setExportChoice('notebook')} />
+                  <input type="radio" name="export" checked={exportChoice === 'notebook'} onChange={() => setExportChoicePersisted('notebook')} />
                   <span>Jupyter notebook (.ipynb)</span>
                 </label>
               )}
             </div>
 
+            {exportDialogStatus && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>{exportDialogStatus}</div>}
+
             <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              {(exportChoice === 'python' || exportChoice === 'cpp') && selectedMacro && (
+                <button
+                  onClick={async () => {
+                    if (!selectedMacro) return
+                    const text = renderFullMacroText(selectedMacro, exportChoice === 'python' ? 'python' : 'cpp')
+                    const ok = await copyTextToClipboard(text)
+                    setExportDialogStatus(ok ? 'Copied to clipboard.' : 'Copy failed.')
+                  }}
+                >
+                  Copy
+                </button>
+              )}
               <button onClick={() => setShowExportDialog(false)}>Cancel</button>
               <button
                 onClick={() => {
