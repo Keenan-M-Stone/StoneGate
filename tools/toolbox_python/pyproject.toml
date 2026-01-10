@@ -1,0 +1,11 @@
+[project]
+name = "stonegate-toolbox"
+version = "0.1.0"
+description = "StoneGate toolbox RPC client (Python)"
+requires-python = ">=3.10"
+dependencies = [
+  "websockets>=12.0",
+]
+
+[project.scripts]
+stonegate-toolbox = "stonegate_toolbox_client:main"

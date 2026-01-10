@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <random>
+#include <unordered_map>
 #include <nlohmann/json.hpp>
 
 class PhysicsEngine;
@@ -28,4 +29,15 @@ private:
     double noise_seed();
     std::mt19937_64 rng;
     PhysicsEngine* physics = nullptr;
+
+    // Persistent simulated state so UI actions have visible effects.
+    std::unordered_map<std::string, double> numeric_state;
+    std::unordered_map<std::string, int> int_state;
+    std::unordered_map<std::string, bool> bool_state;
+    std::unordered_map<std::string, std::string> string_state;
+
+    // Helpers
+    double get_temperature_K_fallback() const;
+    double compute_p_flip(double temperature_K) const;
+    void init_defaults();
 };

@@ -14,5 +14,26 @@
   "Thermocouple_v1": {
     "type": "Thermocouple",
     "specs": { "precision": 0.01, "noise_coeff": 0.005 }
+  },
+  "PressureController_v1": {
+    "type": "PressureController",
+    "specs": {
+      "pressure_setpoint_default_kPa": 101.3,
+      "tau_pressure_s": 8.0,
+      "leak_rate_per_s": 0.0002,
+      "noise_coeff": 0.002
+    }
+  },
+  "PressureSensor_v1": {
+    "type": "PressureSensor",
+    "specs": { "precision_kPa": 0.01, "noise_coeff": 0.002 }
+  },
+  "AmbientLightSensor_v1": {
+    "type": "AmbientLightSensor",
+    "specs": { "ambient_lux_default": 30.0, "noise_coeff": 0.05 }
+  },
+  "VibrationSensor_v1": {
+    "type": "VibrationSensor",
+    "specs": { "vibration_rms_default": 0.001, "noise_coeff": 0.05 }
   }
 }

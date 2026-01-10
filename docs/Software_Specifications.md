@@ -213,8 +213,8 @@ Dialog titles, primary action, cancel action, and expected lifecycle are listed.
        - `if/else` (contains THEN and ELSE child step lists)
      - Each step exposes step-scoped **Preview** and **Errors** (for that step only).
      - Full runnable scripts are produced only via explicit export:
-       - Python uses `stonegate_api.py` (and `stonegate_qec.py` for QEC helpers)
-       - C++ uses `stonegate_api.hpp`
+       - Python uses `stonegate_api` / `stonegate_qec` (generated installable SDK via `tools/generate_stonegate_sdk.py`)
+       - C++ uses `stonegate_api.hpp` / `stonegate_qec.hpp` (also generated to `sdk/cpp/include/`)
        - Notebook import/export stores macros in notebook metadata under `metadata.stonegate.macros`
      - Execution semantics (client-side runner):
        - Supports run/pause/resume/skip/cancel.

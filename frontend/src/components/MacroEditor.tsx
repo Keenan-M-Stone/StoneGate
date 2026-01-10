@@ -254,6 +254,185 @@ function findStepById(steps: Step[], stepId: string): Step | null {
   return null
 }
 
+function tryParseNotebookAsMacroFromCode(nb: any): ScriptMacro | null {
+  if (!nb || typeof nb !== 'object' || !Array.isArray(nb.cells)) return null
+
+  const codeLines: string[] = []
+  for (const c of nb.cells) {
+    if (!c || typeof c !== 'object') continue
+    if (c.cell_type !== 'code') continue
+    const src = c.source
+    if (Array.isArray(src)) codeLines.push(...src.map((x: any) => String(x)).join('').split(/\r?\n/))
+    else if (typeof src === 'string') codeLines.push(...src.split(/\r?\n/))
+  }
+
+  const constStrings = new Map<string, string>()
+  const constNumbers = new Map<string, number>()
+  for (const raw of codeLines) {
+    const line = raw.trim()
+    const mStr = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*['"]([^'"]+)['"]\s*$/)
+    if (mStr) {
+      constStrings.set(mStr[1], mStr[2])
+      continue
+    }
+    const mNum = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([-+]?[0-9]*\.?[0-9]+)\s*$/)
+    if (mNum) {
+      constNumbers.set(mNum[1], Number(mNum[2]))
+    }
+  }
+
+  const substituteFStringVars = (s: string) =>
+    s.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_m, name) => {
+      if (constNumbers.has(name)) return String(constNumbers.get(name))
+      if (constStrings.has(name)) return JSON.stringify(constStrings.get(name))
+      return _m
+    })
+
+  const parseJsonLoads = (line: string): any | null => {
+    const m = line.match(/json\.loads\(\s*r(f)?\"\"\"([\s\S]*?)\"\"\"\s*\)/)
+    if (!m) return null
+    const raw = substituteFStringVars(m[2])
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return null
+    }
+  }
+
+  const parsePythonDictLiteral = (line: string): any | null => {
+    const idx = line.indexOf('{')
+    if (idx < 0) return null
+    const cand = line.slice(idx)
+    // Very small best-effort conversion. Only intended for simple literals.
+    const jsonish = cand
+      .replace(/\bTrue\b/g, 'true')
+      .replace(/\bFalse\b/g, 'false')
+      .replace(/\bNone\b/g, 'null')
+      .replace(/'/g, '"')
+    try {
+      return JSON.parse(jsonish)
+    } catch {
+      return null
+    }
+  }
+
+  const resolveDeviceId = (expr: string): string | null => {
+    const e = expr.trim()
+    const mLit = e.match(/^['"]([^'"]+)['"]$/)
+    if (mLit) return mLit[1]
+    if (constStrings.has(e)) return constStrings.get(e) ?? null
+    return null
+  }
+
+  const steps: Step[] = []
+  let pendingName: string | null = null
+
+  for (let i = 0; i < codeLines.length; i++) {
+    const raw = codeLines[i]
+    const line = raw.trim()
+    if (!line) continue
+
+    const mMarker = line.match(/^#\s*###>\s*"([^"]+)"\s*<###/)
+    if (mMarker) {
+      pendingName = mMarker[1]
+      continue
+    }
+
+    // await sg.device_action(...)
+    const mAct = line.match(/^await\s+sg\.device_action\(\s*([^,]+)\s*,\s*(.+)\)\s*$/)
+    if (mAct) {
+      const deviceId = resolveDeviceId(mAct[1])
+      const action = parseJsonLoads(line) ?? parsePythonDictLiteral(mAct[2])
+      if (deviceId && action) {
+        steps.push({
+          id: newId(),
+          name: pendingName ?? `Device Action: ${deviceId}`,
+          kind: 'deviceAction',
+          device_id: deviceId,
+          action,
+          safeClamp: true,
+          enabled: true,
+        })
+        pendingName = null
+        continue
+      }
+    }
+
+    // await sg.wait_for_stable(device_id=..., metric=..., ...)
+    const mWaitKw = line.match(
+      /^await\s+sg\.wait_for_stable\(\s*device_id\s*=\s*([^,]+)\s*,\s*metric\s*=\s*['"]([^'"]+)['"]\s*,\s*tolerance\s*=\s*([0-9.eE+-]+)\s*,\s*window_s\s*=\s*([0-9.eE+-]+)\s*,\s*consecutive\s*=\s*([0-9]+)\s*,\s*timeout_s\s*=\s*([0-9.eE+-]+)\s*\)\s*$/
+    )
+    if (mWaitKw) {
+      const deviceId = resolveDeviceId(mWaitKw[1])
+      if (deviceId) {
+        steps.push({
+          id: newId(),
+          name: pendingName ?? `Wait For Stable: ${deviceId}:${mWaitKw[2]}`,
+          kind: 'waitForStable',
+          device_id: deviceId,
+          metric: mWaitKw[2],
+          tolerance: Number(mWaitKw[3]),
+          window_ms: Number(mWaitKw[4]) * 1000,
+          consecutive: Number(mWaitKw[5]),
+          timeout_ms: Number(mWaitKw[6]) * 1000,
+          enabled: true,
+        })
+        pendingName = null
+        continue
+      }
+    }
+
+    // await sg.wait_for_stable(<device>, '<metric>', tolerance=..., window_s=..., consecutive=..., timeout_s=...)
+    const mWaitPos = line.match(
+      /^await\s+sg\.wait_for_stable\(\s*([^,]+)\s*,\s*['"]([^'"]+)['"]\s*,\s*tolerance\s*=\s*([0-9.eE+-]+)\s*,\s*window_s\s*=\s*([0-9.eE+-]+)\s*,\s*consecutive\s*=\s*([0-9]+)\s*,\s*timeout_s\s*=\s*([0-9.eE+-]+)\s*\)\s*$/
+    )
+    if (mWaitPos) {
+      const deviceId = resolveDeviceId(mWaitPos[1])
+      if (deviceId) {
+        steps.push({
+          id: newId(),
+          name: pendingName ?? `Wait For Stable: ${deviceId}:${mWaitPos[2]}`,
+          kind: 'waitForStable',
+          device_id: deviceId,
+          metric: mWaitPos[2],
+          tolerance: Number(mWaitPos[3]),
+          window_ms: Number(mWaitPos[4]) * 1000,
+          consecutive: Number(mWaitPos[5]),
+          timeout_ms: Number(mWaitPos[6]) * 1000,
+          enabled: true,
+        })
+        pendingName = null
+        continue
+      }
+    }
+
+    // await asyncio.sleep(x)
+    const mSleep = line.match(/^await\s+asyncio\.sleep\(\s*([0-9.eE+-]+)\s*\)\s*$/)
+    if (mSleep) {
+      steps.push({
+        id: newId(),
+        name: pendingName ?? 'Sleep',
+        kind: 'sleep',
+        ms: Number(mSleep[1]) * 1000,
+        enabled: true,
+      })
+      pendingName = null
+      continue
+    }
+  }
+
+  if (!steps.length) return null
+
+  const name = typeof nb?.metadata?.title === 'string' ? nb.metadata.title : 'Imported Notebook'
+  return {
+    id: newId(),
+    name,
+    renderAs: 'ui',
+    defaults: { safeState: { targets: {} } },
+    steps,
+  }
+}
+
 function flattenStepIds(steps: Step[], out: string[] = []) {
   for (const s of steps) {
     out.push(s.id)
@@ -1621,9 +1800,13 @@ export default function MacroEditor() {
       if (Array.isArray(nbStonegate?.macros)) incoming = nbStonegate.macros
       else if (nbStonegate?.macro && typeof nbStonegate.macro === 'object') incoming = [nbStonegate.macro]
       else {
-        appendLog('Import failed: notebook missing metadata.stonegate.macro(s)')
-        setBottomTab('errors')
-        return
+        const inferred = tryParseNotebookAsMacroFromCode(v)
+        if (inferred) incoming = [inferred]
+        else {
+          appendLog('Import failed: notebook missing metadata.stonegate.macro(s) and no recognizable stonegate_api calls were found')
+          setBottomTab('errors')
+          return
+        }
       }
     }
 

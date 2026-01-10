@@ -153,7 +153,60 @@ The backend will also send non-RPC messages like `descriptor` (on connect) and `
 - `record.stop` params: `{ recording_id: string }`
 - `qec.decode` params: QECRequest-ish object; returns a deterministic, toy decode result (majority vote)
 
-For Python notebooks/scripts, prefer the shared helpers in `stonegate_api.py` (and `stonegate_qec.py` for QEC utilities). For C++, prefer `stonegate_api.hpp`.
+### SDK generation (Python + C++)
+
+The repo includes lightweight SDK helpers (used by Macro Wizard exports and tools):
+
+- Python: `stonegate_api` and `stonegate_qec`
+- C++: `stonegate_api.hpp` and `stonegate_qec.hpp`
+
+These are kept as *source of truth* at repo root, and can be generated into installable/distributable artifacts under `sdk/`:
+
+```bash
+cd /path/to/StoneGate
+python3 tools/generate_stonegate_sdk.py
+
+# Python: editable install
+python3 -m pip install -e sdk/python/stonegate_sdk
+```
+
+After that, notebooks/scripts should simply do:
+
+```python
+import stonegate_api as sg
+import stonegate_qec as qec
+```
+
+For C++ consumers, the generator also writes `sdk/cpp/include/stonegate_api.hpp` and `sdk/cpp/include/stonegate_qec.hpp` with a minimal `CMakeLists.txt`.
+
+### Leak check (simulator)
+
+The simulator includes a pressure controller + sensor that can be used to run a simple leak-check procedure.
+
+Run the backend simulator:
+
+```bash
+cd backend/build
+./StoneGate --sim
+```
+
+Then run either:
+
+```bash
+# From repo root:
+python3 tools/leak_check.py --ws ws://localhost:8080/status --target-kpa 40 --observe-s 60
+```
+
+Or open and run the notebook:
+
+If you run notebooks from `tools/`, install the generated SDK first:
+
+```bash
+python3 tools/generate_stonegate_sdk.py
+python3 -m pip install -e sdk/python/stonegate_sdk
+```
+
+- [tools/leak_check.ipynb](../tools/leak_check.ipynb)
 
 ### Python client
 

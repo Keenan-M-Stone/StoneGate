@@ -58,5 +58,29 @@
         "properties": ["syndrome", "correction_applied"],
         "interactive": ["extract_syndrome", "apply_correction", "set_code_type"],
         "plot": ["syndrome"]
+    },
+    "PressureController": {
+        "displayName": "Pressure Controller",
+        "properties": ["pressure_setpoint_kPa", "sealed", "pump_enabled"],
+        "interactive": ["set_pressure_kPa", "seal", "vent", "pump_enable"],
+        "plot": ["pressure_setpoint_kPa"]
+    },
+    "PressureSensor": {
+        "displayName": "Pressure Sensor",
+        "properties": ["pressure_kPa"],
+        "interactive": [],
+        "plot": ["pressure_kPa"]
+    },
+    "AmbientLightSensor": {
+        "displayName": "Ambient Light Sensor",
+        "properties": ["ambient_lux"],
+        "interactive": [],
+        "plot": ["ambient_lux"]
+    },
+    "VibrationSensor": {
+        "displayName": "Vibration Sensor",
+        "properties": ["vibration_rms"],
+        "interactive": [],
+        "plot": ["vibration_rms"]
     }
 }

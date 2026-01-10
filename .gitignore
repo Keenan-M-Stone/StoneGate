@@ -1,0 +1,51 @@
+# --- StoneGate (repo root) ---
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Logs
+*.log
+
+# Node
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/.turbo/
+**/.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# CMake / C++ build artifacts
+**/build/
+**/cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.exe
+
+# Recordings / generated data
+shared/recordings/
+
+# Coverage
+coverage/
+*.gcda
+*.gcno
+*.lcov

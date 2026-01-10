@@ -34,12 +34,18 @@ public:
     // get cached step (thread-safe snapshot)
     nlohmann::json get_cached_step();
 
+    // Get the current simulated environment state (temperature/pressure/etc).
+    nlohmann::json get_env_state();
+
     // Feedback control: automatically adjust LN2 flow to reach target temperature.
     // Returns true if target reached within tolerance and max_steps, false otherwise.
     bool auto_cool_to_temp(const std::string& ln2_id, const std::string& thermo_id, double target_K, double tolerance = 0.5, int max_steps = 30);
 
 private:
     void compute_and_cache();
+
+    void advance_dynamics(double dt_s);
+    static double clamp(double v, double lo, double hi);
 
     nlohmann::json partsLib;
     nlohmann::json deviceOverrides;
@@ -59,4 +65,12 @@ private:
     std::atomic<bool> running{false};
     std::chrono::milliseconds interval{200};
     std::filesystem::file_time_type overridesLastWrite;
+
+    // Stateful environment (shared apparatus model).
+    std::mutex envMutex;
+    double env_temperature_K = 77.0;
+    double env_pressure_kPa = 101.3;
+    double env_ambient_lux = 30.0;
+    double env_vibration_rms = 0.001;
+    std::chrono::steady_clock::time_point lastStep = std::chrono::steady_clock::time_point::min();
 };

@@ -14,9 +14,12 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
+    "declaration": true,
     "emitDeclarationOnly": true,
-    //"noEmit": true,
+    "outDir": "dist/types/app",
+    "rootDir": "..",
     "jsx": "react-jsx",
+    "resolveJsonModule": true,
 
     /* Linting */
     "strict": true,
@@ -26,5 +29,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "../shared/**/*.ts"]
+  "include": ["src", "../shared/**/*.ts", "../shared/**/*.json"]
 }
