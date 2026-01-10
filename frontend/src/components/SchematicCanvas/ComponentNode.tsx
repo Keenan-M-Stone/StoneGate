@@ -1,7 +1,8 @@
-import React from 'react'
+import { useRef } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { DeviceStatus } from '../../../../shared/protocol/MessageTypes'
 
-export default function ComponentNode({ id, label, type, status, schema, buildMode=false, width=200, height=140, onResize, spacing=1 }:{
+export default function ComponentNode({ id: _id, label, type, status, schema: _schema, buildMode=false, width=200, height=140, onResize, spacing=1 }:{
 	id:string, label:string, type:string, status?:DeviceStatus | null, schema?:any,
 	buildMode?:boolean, width?:number, height?:number, onResize?: (w:number,h:number)=>void, spacing?:number
 }){
@@ -10,9 +11,9 @@ export default function ComponentNode({ id, label, type, status, schema, buildMo
 	const measurements = status?.measurements ?? {}
 
 	// Resizing logic (drag handles) — convert screen delta to SVG units by dividing by spacing
-	const startRef = React.useRef<{x:number,y:number,w:number,h:number}|null>(null)
+	const startRef = useRef<{x:number,y:number,w:number,h:number}|null>(null)
 
-	const handleMouseDown = (e:React.MouseEvent, corner:'se'|'e'|'s') => {
+	const handleMouseDown = (e:ReactMouseEvent, corner:'se'|'e'|'s') => {
 		if (!buildMode) return
 		e.stopPropagation()
 		startRef.current = { x: e.clientX, y: e.clientY, w: width, h: height }

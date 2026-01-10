@@ -4,6 +4,19 @@ project(StoneGate LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Embed git commit hash when building from a git checkout (best-effort).
+set(STONEGATE_GIT_COMMIT "unknown")
+execute_process(
+    COMMAND git -C ${CMAKE_CURRENT_LIST_DIR}/.. rev-parse --short HEAD
+    OUTPUT_VARIABLE _STONEGATE_GIT_COMMIT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _STONEGATE_GIT_COMMIT_RC
+)
+if(_STONEGATE_GIT_COMMIT_RC EQUAL 0 AND NOT "${_STONEGATE_GIT_COMMIT}" STREQUAL "")
+    set(STONEGATE_GIT_COMMIT "${_STONEGATE_GIT_COMMIT}")
+endif()
+
 # Add header-only dependencies (will be populated later)
 include_directories(include)
 
@@ -14,6 +27,7 @@ add_library(core
     src/DescriptorProtocol.cpp
     src/core/simulator/SimulatedDevice.cpp
     src/core/simulator/Simulator.cpp
+    src/core/Recorder.cpp
     src/devices/ThermocoupleDevice.cpp
     src/devices/PhotonicDetectorDevice.cpp
     src/devices/LN2CoolingControllerDevice.cpp
@@ -26,6 +40,8 @@ add_library(core
 )
 
 target_include_directories(core PUBLIC include)
+
+target_compile_definitions(core PRIVATE STONEGATE_GIT_COMMIT="${STONEGATE_GIT_COMMIT}")
 
 target_link_libraries(core PRIVATE pthread)
 find_package(Boost REQUIRED COMPONENTS system)

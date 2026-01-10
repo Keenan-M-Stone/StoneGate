@@ -1,5 +1,3 @@
-import React from 'react'
-
 export default function Wire({ from, to }:{from:any, to:any}){
   const x1 = from.x
   const y1 = from.y

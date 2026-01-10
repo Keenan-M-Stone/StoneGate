@@ -34,6 +34,10 @@ public:
     // get cached step (thread-safe snapshot)
     nlohmann::json get_cached_step();
 
+    // Feedback control: automatically adjust LN2 flow to reach target temperature.
+    // Returns true if target reached within tolerance and max_steps, false otherwise.
+    bool auto_cool_to_temp(const std::string& ln2_id, const std::string& thermo_id, double target_K, double tolerance = 0.5, int max_steps = 30);
+
 private:
     void compute_and_cache();
 

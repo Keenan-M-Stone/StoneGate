@@ -11,7 +11,12 @@ nlohmann::json PulseSequencerDevice::descriptor() const {
         {"id", dev_id},
         {"type", "pulse_sequencer"},
         {"status", running ? "running" : "idle"},
-        {"sequence_loaded", sequence_loaded}
+        {"sequence_loaded", sequence_loaded},
+        {"specs", { {"max_sampling_rate_hz", 10.0} }},
+        {"metrics", {
+            {"current_step", { {"kind", "integer"}, {"unit", "step"}, {"backend_unit", "step"}, {"min", 0.0} }},
+            {"running", { {"kind", "boolean"} }}
+        }}
     };
 }
 

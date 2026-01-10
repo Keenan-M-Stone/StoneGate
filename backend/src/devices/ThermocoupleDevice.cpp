@@ -13,10 +13,21 @@ nlohmann::json ThermocoupleDevice::descriptor() const {
         {"type", "thermocouple"},
         {"status", "ok"},
         {"specs", {
+            {"max_sampling_rate_hz", 10.0},
             {"precision", 0.01},
             {"range", {-200, 500}},
             {"manufacturer", "Stone Labs: Quantum Sensors and Measurements Division"},
             {"datasheet_url", "https://example.com/thermocouple"}
+        }},
+        {"metrics", {
+            {"temperature_C", {
+                {"kind", "number"},
+                {"unit", "°C"},
+                {"backend_unit", "°C"},
+                {"precision", 0.01},
+                {"min", -200.0},
+                {"max", 500.0}
+            }}
         }}
     };
 }

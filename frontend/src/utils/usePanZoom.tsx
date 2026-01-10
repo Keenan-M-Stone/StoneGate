@@ -1,18 +1,23 @@
-import React, { useRef, useEffect, useState, ReactNode } from "react";
+import React, { useRef, useEffect, useMemo, useState, type ReactNode } from "react";
 
 export interface PanZoomProps {
   children: ReactNode;
   contentWidth: number;
   contentHeight: number;
   enableMiniMap?: boolean;
+  miniMapContent?: ReactNode;
+  buildMode?: boolean;
+  style?: React.CSSProperties;
+  className?: string;
 }
 
 /* ------------------------------------------------------------------
    Hook: usePanZoom
    ------------------------------------------------------------------ */
-export function usePanZoom(initialScale = 1) {
+export function usePanZoom(initialScale = 1, contentWidth?: number, contentHeight?: number) {
   const [scale, setScale] = useState(initialScale);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const ref = useRef<HTMLDivElement | null>(null);
   const dragging = useRef(false);
@@ -112,18 +117,20 @@ export function usePanZoom(initialScale = 1) {
     window.addEventListener("click", remove);
   };
 
-  const fitToScreen = () => {
+  const fitToScreen = React.useCallback(() => {
     if (!ref.current) return;
-    const wrapper = ref.current.parentElement!;
-    const rect = wrapper.getBoundingClientRect();
+    const w = containerSize.width || ref.current.getBoundingClientRect().width;
+    const h = containerSize.height || ref.current.getBoundingClientRect().height;
+    const cw = contentWidth ?? 0;
+    const ch = contentHeight ?? 0;
+    if (!w || !h || !cw || !ch) return;
 
-    const scaleX = rect.width / (ref.current.scrollWidth || rect.width);
-    const scaleY = rect.height / (ref.current.scrollHeight || rect.height);
-    const next = Math.min(scaleX, scaleY) * 0.95;
-
+    const next = Math.min(w / cw, h / ch) * 0.95;
+    const nx = (w - cw * next) / 2;
+    const ny = (h - ch * next) / 2;
     setScale(next);
-    setOffset({ x: 20, y: 20 });
-  };
+    setOffset({ x: nx, y: ny });
+  }, [containerSize.width, containerSize.height, contentWidth, contentHeight]);
 
   const reset = () => {
     setScale(1);
@@ -150,6 +157,19 @@ export function usePanZoom(initialScale = 1) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!ref.current) return;
+    const el = ref.current;
+    const ro = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (!entry) return;
+      const cr = entry.contentRect;
+      setContainerSize({ width: cr.width, height: cr.height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return {
     ref,
     scale,
@@ -158,6 +178,7 @@ export function usePanZoom(initialScale = 1) {
     setOffset,
     fitToScreen,
     reset,
+    containerSize,
   };
 }
 
@@ -169,20 +190,93 @@ export function MiniMap({
   offset,
   contentWidth,
   contentHeight,
+  containerWidth,
+  containerHeight,
+  content,
+  buildMode,
+  onRecenter,
 }: {
   scale: number;
   offset: { x: number; y: number };
   contentWidth: number;
   contentHeight: number;
+  containerWidth: number;
+  containerHeight: number;
+  content?: ReactNode;
+  buildMode?: boolean;
+  onRecenter?: (worldX: number, worldY: number) => void;
 }) {
   const mapSize = 180;
-  const viewW = window.innerWidth;
-  const viewH = window.innerHeight;
 
-  const vx = (-offset.x / scale) / contentWidth;
-  const vy = (-offset.y / scale) / contentHeight;
-  const vw = viewW / (contentWidth * scale);
-  const vh = viewH / (contentHeight * scale);
+  const viewW = Math.max(1, containerWidth);
+  const viewH = Math.max(1, containerHeight);
+
+  // viewport in world coordinates (content space)
+  const vxW = -offset.x / scale;
+  const vyW = -offset.y / scale;
+  const vwW = viewW / scale;
+  const vhW = viewH / scale;
+
+  const viewCx = vxW + vwW / 2;
+  const viewCy = vyW + vhW / 2;
+
+  const inside =
+    viewCx >= 0 &&
+    viewCy >= 0 &&
+    viewCx <= contentWidth &&
+    viewCy <= contentHeight;
+
+  const showArrow = buildMode && !inside;
+
+  const clampedVx = Math.max(0, Math.min(vxW, contentWidth));
+  const clampedVy = Math.max(0, Math.min(vyW, contentHeight));
+  const clampedVw = Math.max(0, Math.min(vwW, contentWidth - clampedVx));
+  const clampedVh = Math.max(0, Math.min(vhW, contentHeight - clampedVy));
+
+  const arrow = useMemo(() => {
+    if (!showArrow) return null;
+    const cx = contentWidth / 2;
+    const cy = contentHeight / 2;
+    const dx = viewCx - cx;
+    const dy = viewCy - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+
+    // place arrow near minimap border in world coords
+    const margin = Math.max(contentWidth, contentHeight) * 0.06;
+    const bx = cx + ux * (Math.min(contentWidth, contentHeight) / 2 - margin);
+    const by = cy + uy * (Math.min(contentWidth, contentHeight) / 2 - margin);
+
+    const size = Math.max(contentWidth, contentHeight) * 0.04;
+    // triangle arrow head
+    const leftx = bx - uy * size - ux * size * 0.2;
+    const lefty = by + ux * size - uy * size * 0.2;
+    const rightx = bx + uy * size - ux * size * 0.2;
+    const righty = by - ux * size - uy * size * 0.2;
+    const tipx = bx + ux * size * 1.6;
+    const tipy = by + uy * size * 1.6;
+
+    return {
+      bx,
+      by,
+      leftx,
+      lefty,
+      rightx,
+      righty,
+      tipx,
+      tipy,
+    };
+  }, [showArrow, viewCx, viewCy, contentWidth, contentHeight]);
+
+  const onClick = (e: React.MouseEvent) => {
+    if (!onRecenter) return;
+    const target = e.currentTarget as HTMLDivElement;
+    const rect = target.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    onRecenter(px * contentWidth, py * contentHeight);
+  };
 
   return (
     <div
@@ -198,19 +292,50 @@ export function MiniMap({
         zIndex: 999,
         opacity: 0.85,
       }}
+      onClick={onClick}
+      title={showArrow ? "Off schematic: click to recenter" : "Click to recenter"}
     >
-      <div
-        style={{
-          position: "absolute",
-          left: `${vx * mapSize}px`,
-          top: `${vy * mapSize}px`,
-          width: `${vw * mapSize}px`,
-          height: `${vh * mapSize}px`,
-          border: "2px solid #39f",
-          borderRadius: 4,
-          pointerEvents: "none",
-        }}
-      />
+      <svg
+        width={mapSize}
+        height={mapSize}
+        viewBox={`0 0 ${contentWidth} ${contentHeight}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: "block" }}
+      >
+        <rect x={0} y={0} width={contentWidth} height={contentHeight} fill="#0b1222" />
+        <g opacity={0.9}>{content}</g>
+
+        {!showArrow && (
+          <rect
+            x={clampedVx}
+            y={clampedVy}
+            width={clampedVw}
+            height={clampedVh}
+            fill="none"
+            stroke="#39f"
+            strokeWidth={Math.max(2, Math.max(contentWidth, contentHeight) * 0.003)}
+          />
+        )}
+
+        {showArrow && arrow && (
+          <g>
+            <line
+              x1={contentWidth / 2}
+              y1={contentHeight / 2}
+              x2={arrow.bx}
+              y2={arrow.by}
+              stroke="#ffcc33"
+              strokeWidth={Math.max(2, Math.max(contentWidth, contentHeight) * 0.003)}
+              opacity={0.9}
+            />
+            <polygon
+              points={`${arrow.leftx},${arrow.lefty} ${arrow.rightx},${arrow.righty} ${arrow.tipx},${arrow.tipy}`}
+              fill="#ffcc33"
+              opacity={0.95}
+            />
+          </g>
+        )}
+      </svg>
     </div>
   );
 }
@@ -223,8 +348,37 @@ export function PanZoomContainer({
   contentWidth,
   contentHeight,
   enableMiniMap = true,
+  miniMapContent,
+  buildMode,
+  style,
+  className,
 }: PanZoomProps) {
-  const pz = usePanZoom(1);
+  const pz = usePanZoom(1, contentWidth, contentHeight);
+
+  // Fit to full schematic by default, and re-fit when content grows (esp. in build mode)
+  const lastContent = useRef<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    pz.fitToScreen();
+  }, [pz.containerSize.width, pz.containerSize.height, pz.fitToScreen]);
+
+  useEffect(() => {
+    const prev = lastContent.current;
+    lastContent.current = { w: contentWidth, h: contentHeight };
+    if (!prev) return;
+    const grew = contentWidth > prev.w + 1 || contentHeight > prev.h + 1;
+    if (grew && buildMode) {
+      pz.fitToScreen();
+    }
+  }, [contentWidth, contentHeight, buildMode, pz.fitToScreen]);
+
+  const recenterTo = (worldX: number, worldY: number) => {
+    const w = pz.containerSize.width;
+    const h = pz.containerSize.height;
+    if (!w || !h) return;
+    const x = w / 2 - worldX * pz.scale;
+    const y = h / 2 - worldY * pz.scale;
+    pz.setOffset({ x, y });
+  };
 
   return (
     <div
@@ -235,7 +389,9 @@ export function PanZoomContainer({
         overflow: "hidden",
         borderRadius: 8,
         background: "#020615",
+        ...style,
       }}
+      className={className}
       ref={pz.ref}
     >
       {/* Transform wrapper */}
@@ -256,6 +412,11 @@ export function PanZoomContainer({
           offset={pz.offset}
           contentWidth={contentWidth}
           contentHeight={contentHeight}
+          containerWidth={pz.containerSize.width}
+          containerHeight={pz.containerSize.height}
+          content={miniMapContent}
+          buildMode={buildMode}
+          onRecenter={recenterTo}
         />
       )}
     </div>

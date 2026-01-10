@@ -11,7 +11,12 @@ nlohmann::json QECModuleDevice::descriptor() const {
         {"id", dev_id},
         {"type", "qec_module"},
         {"code_type", code_type},
-        {"status", "ok"}
+        {"status", "ok"},
+        {"specs", { {"max_sampling_rate_hz", 10.0} }},
+        {"metrics", {
+            {"syndrome", { {"kind", "integer"} }},
+            {"correction_applied", { {"kind", "boolean"} }}
+        }}
     };
 }
 

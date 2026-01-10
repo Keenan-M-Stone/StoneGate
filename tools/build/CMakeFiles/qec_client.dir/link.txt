@@ -1,1 +1,0 @@
-/usr/bin/c++  -g   CMakeFiles/qec_client.dir/qec_client.cpp.o  -o qec_client  /usr/lib/x86_64-linux-gnu/libcurl.so 

@@ -1,5 +1,3 @@
-import React from 'react'
-
 export default function HelpDialog({ schema }:{schema:any}){
   return (
     <div style={{ padding: 12 }}>

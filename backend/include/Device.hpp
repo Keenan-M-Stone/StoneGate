@@ -69,7 +69,13 @@ public:
     }
 
     /** @brief Perform a control action (from FE or script) */
-    virtual void perform_action(Operation op, const nlohmann::json& args) = 0;
+    virtual void perform_action(Operation op, const nlohmann::json& args) {
+        // Default: translate to a JSON command. Devices that want structured ops
+        // can override this; most devices only implement JSON-based control.
+        nlohmann::json cmd = nlohmann::json::object();
+        cmd[operation_to_string(op)] = args;
+        perform_action(cmd);
+    }
 
     /** @brief Perform a control action (from FE or script) */
     virtual void perform_action(const nlohmann::json& cmd) = 0;

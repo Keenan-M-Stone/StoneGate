@@ -2,6 +2,7 @@ import React from 'react'
 import History from '../../../state/history'
 import Backend from '../../../api/backend'
 import { useDeviceStore } from '../../../state/store'
+import { UiErrors } from '../../../utils/errorCatalog'
 
 function calcStats(values: (number|null)[]){
   const nums = values.filter((v): v is number => typeof v === 'number')
@@ -19,8 +20,10 @@ function calcStats(values: (number|null)[]){
   return { mean, median, mode, std, meanDeriv }
 }
 
-export default function ComponentDialog({ id, status, schema, onClose }:{
-  id:string, status:any, schema:any, onClose?:()=>void
+export default function ComponentDialog({ id, status, schema: _schema, onClose, onStageSet, onStageZero }:{
+  id:string, status:any, schema:any, onClose?:()=>void,
+  onStageSet?: (params:any)=>void,
+  onStageZero?: ()=>void
 }){
   const device = useDeviceStore(s=>s.devices[id])
   const [tab, setTab] = React.useState<'plot'|'settings'|'stats'|'json'>('plot')
@@ -31,7 +34,6 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
   const [refreshRate, setRefreshRate] = React.useState<number>(() => { try { return parseFloat(localStorage.getItem('cg.refreshRate')||'1') } catch { return 1 } })
   const [paused, setPaused] = React.useState(false)
   const [offsetMs, setOffsetMs] = React.useState(0)
-  const [plotSettingsOpen, setPlotSettingsOpen] = React.useState(false)
   const [color, setColor] = React.useState<string>(() => localStorage.getItem('cg.color') || '#00ff88')
   const [grid, setGrid] = React.useState<boolean>(() => (localStorage.getItem('cg.grid')||'true')==='true')
   const [logX, setLogX] = React.useState<boolean>(false)
@@ -52,10 +54,10 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
   },[metrics.join(',' )])
 
   // plot update interval
-  const [tick, setTick] = React.useState(0)
+  const [, forceRerender] = React.useReducer((n:number)=>n+1, 0)
   React.useEffect(()=>{
     if (paused) return
-    const idt = setInterval(()=> setTick(t => t+1), Math.max(100, 1000*Math.max(0.1, 1/refreshRate)))
+    const idt = setInterval(()=> forceRerender(), Math.max(100, 1000*Math.max(0.1, 1/refreshRate)))
     return ()=> clearInterval(idt)
   },[paused, refreshRate])
 
@@ -81,10 +83,11 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
   const handleForward = ()=> setOffsetMs(o => Math.max(0, o - Math.round(1000/Math.max(0.1, refreshRate))))
 
   const doZero = ()=>{
-    // send zero control to backend
+    if (onStageZero) return onStageZero()
     Backend.send({ type: 'control', cmd: 'action', device_id: id, action: { zero: true } })
   }
   const doSet = (params:any)=>{
+    if (onStageSet) return onStageSet(params)
     Backend.send({ type: 'control', cmd: 'action', device_id: id, action: { set: params } })
   }
 
@@ -101,7 +104,6 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
     rows.push(header.join(','))
     for (let t=start; t<=now; t += stepMs){
       const line: string[] = [new Date(t).toISOString()]
-      const sampleArr = History.getSeries(id, metrics[0]||'', seconds, now - t)
       for (const m of metrics){
         // find latest sample <= t
         const s = (History.getSeries(id, m, seconds+1, now - t).slice().sort((a,b)=>b.ts-a.ts)[0])
@@ -141,7 +143,7 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
               <label>Metric: <select value={metric} onChange={e=>setMetric(e.target.value)}>{History.metricsFor(id).map(m=>(<option key={m} value={m}>{m}</option>))}</select></label>
               <label>Range (s): <input type='number' value={timeRange} onChange={e=>setTimeRange(parseInt(e.target.value||'30'))} style={{ width: 80 }} /></label>
               <label>Refresh (Hz): <input type='number' value={refreshRate} onChange={e=>setRefreshRate(parseFloat(e.target.value||'1'))} style={{ width: 80 }} /></label>
-              <button onClick={()=>setPlotSettingsOpen(s=>!s)}>Plot Options</button>
+              <button onClick={()=>setTab('settings')}>Plot Options</button>
             </div>
 
             <div style={{ marginTop: 8, border: '1px solid #123', padding: 8, borderRadius: 6 }}>
@@ -155,8 +157,8 @@ export default function ComponentDialog({ id, status, schema, onClose }:{
               <button onClick={()=>setPaused(p=>!p)}>{paused? 'Play' : 'Pause'}</button>
               <button onClick={handleBack}>◀ Back</button>
               <button onClick={handleForward}>Forward ▶</button>
-              <button onClick={()=>doZero()}>Zero</button>
-              <button onClick={()=>{ const v=prompt('Set value JSON (e.g. {"flow_rate_Lmin":2.0})'); if (v) { try{ doSet(JSON.parse(v)) }catch(e){alert('invalid json')} } }}>Set</button>
+              <button onClick={()=>doZero()}>{onStageZero ? 'Stage Zero' : 'Zero'}</button>
+              <button onClick={()=>{ const v=prompt('Set value JSON (e.g. {"flow_rate_Lmin":2.0})'); if (v) { try{ doSet(JSON.parse(v)) }catch(e){alert(UiErrors.invalidJson())} } }}>{onStageSet ? 'Stage Set' : 'Set'}</button>
               <button onClick={()=>{ const s = parseInt(prompt('Record seconds','10')||'0'); if (s>0) doRecord(s) }}>Record CSV</button>
             </div>
           </div>

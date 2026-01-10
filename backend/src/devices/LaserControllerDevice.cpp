@@ -12,10 +12,29 @@ nlohmann::json LaserControllerDevice::descriptor() const {
         {"type", "laser_controller"},
         {"status", "ok"},
         {"specs", {
+            {"max_sampling_rate_hz", 20.0},
             {"phase_precision", 0.001},
             {"intensity_precision", 0.01},
             {"manufacturer", "Stone Labs: Photonix Division"},
             {"datasheet_url", "https://example.com/laser"}
+        }},
+        {"metrics", {
+            {"phase_rad", {
+                {"kind", "number"},
+                {"unit", "rad"},
+                {"backend_unit", "rad"},
+                {"precision", 0.001},
+                {"min", -3.141592653589793},
+                {"max", 3.141592653589793}
+            }},
+            {"intensity", {
+                {"kind", "number"},
+                {"unit", "arb"},
+                {"backend_unit", "arb"},
+                {"precision", 0.01},
+                {"min", 0.0},
+                {"max", 1.0}
+            }}
         }}
     };
 }

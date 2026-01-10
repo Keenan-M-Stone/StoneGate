@@ -36,14 +36,18 @@ Developer notes can also be found in the main `README.md` doc for the repository
     { "type": "control", "cmd": "macro_run", "macro_id": "my_macro", "parameters": {} }
     ```
 
-- Backend `WebSocketServer` exposes `handle_control(json)` — implement application logic there to interpret `cmd` and route to device driver APIs or the simulator hooks.
+- Backend `WebSocketServer` exposes `handle_control(json)` — implement application logic there to interpret `cmd`
+  and route to device driver APIs or the simulator hooks.
 
 ## Frontend components & hooks (how to wire)
 
-- `frontend/src/api/backend.ts`: central WS client. Use `Backend.send(obj)` to send control messages, and use `Backend.stats()` for connection info.
+- `frontend/src/api/backend.ts`: central WS client. Use `Backend.send(obj)` to send control messages,
+  and use `Backend.stats()` for connection info.
 - `SchematicCanvas` should call `onSelectNode(id)` when a node is single-clicked and `onOpenDialog(id)` when double-clicked.
-- `ComponentDialog` displays measurements from `useDeviceStore` state. Use `useDeviceStore.getState().upsertDevice(...)` to apply updates programmatically.
-- A `MacroEditor` can persist macros to `localStorage` and optionally submit a `macro_run` control message to backend to delegate execution.
+- `ComponentDialog` displays measurements from `useDeviceStore` state. 
+   Use `useDeviceStore.getState().upsertDevice(...)` to apply updates programmatically.
+- A `MacroEditor` can persist macros to `localStorage` and optionally submit a `macro_run` control message to 
+  backend to delegate execution.
 
 ## Messages summary (quick)
 
@@ -94,14 +98,17 @@ Developer notes can also be found in the main `README.md` doc for the repository
 ## Containerization vs installers (short analysis)
 
 - Containerization (Docker):
-  - Pros: reproducible environment, easier to manage dependencies (C++ toolchain in image), portable CI/test runs, one command to start FE+BE with docker-compose.
-  - Cons: increased complexity for developers unfamiliar with Docker, GPU/hardware passthrough for devices is non-trivial, larger image sizes.
+  - Pros: reproducible environment, easier to manage dependencies (C++ toolchain in image), portable CI/test runs,
+    one command to start FE+BE with docker-compose.
+  - Cons: increased complexity for developers unfamiliar with Docker, GPU/hardware passthrough for devices is non-trivial,
+    larger image sizes.
 
 - Native installers / packages:
   - Pros: users can run optimized native binaries, easier hardware access to devices (USB/Ethernet), smaller runtime overhead.
   - Cons: packaging for multiple OSes is work (deb/rpm/msi), dependency management can be tricky for C++ libraries.
 
-- Recommendation (short): provide both for best coverage — a Docker-compose setup for quick demos and CI, and native build instructions for production hardware deployments that require direct device access.
+- Recommendation (short): provide both for best coverage — a Docker-compose setup for quick demos and CI,
+  and native build instructions for production hardware deployments that require direct device access.
 
 ## Developer checklist
 

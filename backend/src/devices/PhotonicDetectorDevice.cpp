@@ -13,8 +13,25 @@ nlohmann::json PhotonicDetectorDevice::descriptor() const {
         {"status", "ok"},
         {"specs", {
             {"dark_rate", dark_rate},
+            {"max_sampling_rate_hz", 50.0},
             {"manufacturer", "Stone Labs: Photonix Division"},
             {"datasheet_url", "https://example.com/detector"}
+        }},
+        {"metrics", {
+            {"counts", {
+                {"kind", "number"},
+                {"unit", "counts"},
+                {"backend_unit", "counts"},
+                {"precision", 1.0},
+                {"min", 0.0}
+            }},
+            {"dark_rate", {
+                {"kind", "number"},
+                {"unit", "cps"},
+                {"backend_unit", "cps"},
+                {"precision", 0.001},
+                {"min", 0.0}
+            }}
         }}
     };
 }

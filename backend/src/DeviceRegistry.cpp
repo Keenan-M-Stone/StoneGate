@@ -13,6 +13,14 @@ void DeviceRegistry::for_each_device(const std::function<void(std::shared_ptr<De
     for (auto& d : devices) fn(d);
 }
 
+std::shared_ptr<Device> DeviceRegistry::get_device(const std::string& id) {
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    for (auto& d : devices) {
+        if (d && d->id() == id) return d;
+    }
+    return nullptr;
+}
+
 nlohmann::json DeviceRegistry::get_descriptor_graph() {
     std::lock_guard<std::mutex> lock(registry_mutex);
     nlohmann::json graph = nlohmann::json::array();

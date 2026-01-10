@@ -1,3 +1,0 @@
-/home/lemma137/dev/StoneGate/tools/build/CMakeFiles/rebuild_cache.dir
-/home/lemma137/dev/StoneGate/tools/build/CMakeFiles/edit_cache.dir
-/home/lemma137/dev/StoneGate/tools/build/CMakeFiles/qec_client.dir

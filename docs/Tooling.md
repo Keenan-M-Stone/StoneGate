@@ -26,7 +26,8 @@ g++ -std=c++17 -O2 -I../backend/include -o qec_client ../tools/qec_client.cpp -l
 
 **Run the QEC stub (development)**
 
-The QEC stub is a simple Flask app at `backend/qec_stub.py`. Run it locally to accept job submissions from the example client:
+The QEC stub is a simple Flask app at `backend/qec_stub.py`.
+Run it locally to accept job submissions from the example client:
 
 ```bash
 cd backend
@@ -93,14 +94,103 @@ stderr_logfile=/tmp/qec_stub.err
 
 **Troubleshooting**
 - If `qec_client` fails to link: ensure `libcurl` dev package is installed and visible to the compiler and linker.
-- If the client POSTs but then cannot fetch results, check that the Flask stub is running and that your `qec_client` is pointed to the correct base URL (e.g., `http://127.0.0.1:5001`).
-- If you see segmentation faults in `qec_client`, rebuild after cleaning: `rm -rf build && mkdir build && cmake .. && cmake --build .` and ensure libraries are up-to-date.
-
-**Next steps / enhancements**
-- Add a small integration test that starts the Flask stub and runs the client automatically (can be a simple Bash script using background processes).
-- Add TLS support and a configurable timeout/retry strategy to `qec_client` for more realistic usage.
+- If the client POSTs but then cannot fetch results, check that the Flask stub is running and that your `qec_client` 
+  is pointed to the correct base URL (e.g., `http://127.0.0.1:5001`).
+- If you see segmentation faults in `qec_client`, rebuild after cleaning: 
+  `rm -rf build && mkdir build && cmake .. && cmake --build .` and ensure libraries are up-to-date.
 
 ---
 
-If you want, I can add the `supervisord` file to `tools/` or create a tiny integration script that runs the stub, waits for health, then runs the client and prints the result. Which would you prefer?
+## Toolbox RPC (WebSocket)
 
+StoneGate also supports a small request/response RPC protocol over the existing WebSocket tunnel.
+This is intended for toolboxes (Python and C++) to perform backend control operations and computations and receive results.
+
+### Protocol
+
+- **RPC request**
+
+```json
+{
+  "type": "rpc",
+  "id": "<client-generated id>",
+  "method": "devices.list | devices.poll | device.action | qec.decode",
+  "params": { }
+}
+```
+
+- **RPC response**
+
+```json
+{
+  "type": "rpc_result",
+  "id": "<same id>",
+  "ok": true,
+  "result": { }
+}
+```
+
+On error:
+
+```json
+{
+  "type": "rpc_result",
+  "id": "<same id>",
+  "ok": false,
+  "error": { "code": "bad_request", "message": "...", "details": {} }
+}
+```
+
+The backend will also send non-RPC messages like `descriptor` (on connect) and `measurement_update` (periodic).
+
+### Supported methods
+
+- `devices.list` → `{ devices: [...] }` (descriptor snapshots)
+- `devices.poll` → `{ updates: [...] }` (same shape as `measurement_update.updates`)
+- `backend.info` → `{ port, git_commit, build_time }`
+- `device.action` params: `{ device_id: string, action: object }`
+- `record.start` params: `{ streams: [{ device_id, metrics: string[], rate_hz: number }...], script_name?: string, operator?: string, file_base?: string }`
+- `record.stop` params: `{ recording_id: string }`
+- `qec.decode` params: QECRequest-ish object; returns a deterministic, toy decode result (majority vote)
+
+### Python client
+
+```bash
+cd tools/toolbox_python
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -e .
+
+stonegate-toolbox --ws ws://localhost:8080/status devices.list
+stonegate-toolbox --ws ws://localhost:8080/status devices.poll
+stonegate-toolbox --ws ws://localhost:8080/status device.action sim_ln2 '{"set_flow_rate": 2.5}'
+
+# Start a recording (JSON array of streams)
+stonegate-toolbox --ws ws://localhost:8080/status record.start \
+  '[{"device_id":"sim_ln2","metrics":["temperature_K","flow_rate_Lmin"],"rate_hz":2.0}]' \
+  --script-name "My Macro" --operator "keenan" --file-base "my_macro"
+
+# Stop a recording
+stonegate-toolbox --ws ws://localhost:8080/status record.stop <recording_id>
+
+# Load a recording JSONL from disk
+stonegate-toolbox record.load shared/recordings/YYYY-MM-DD/<file>.jsonl
+```
+
+### C++ client
+
+Build:
+
+```bash
+cd tools
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . -- -j$(nproc)
+```
+
+Run:
+
+```bash
+./tools/build/toolbox_ws_client ws://localhost:8080/status devices.list
+./tools/build/toolbox_ws_client ws://localhost:8080/status device.action '{"device_id":"sim_ln2","action":{"set_flow_rate":2.5}}'
+```

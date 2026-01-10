@@ -529,11 +529,59 @@ This section lists the hardware-relevant specs the software uses or expects to q
   - Cause: Entered value outside the acceptable range for the control.
   - Action: Enter a value within the displayed min/max; consult device specs.
 
+- Error 1020: "Error 1020: Missing required field '%s'."
+  - Cause: A required field was left empty.
+  - Action: Fill in the missing field; UI highlights the offending step/field.
+
+- Error 1021: "Error 1021: Unknown device '%s'."
+  - Cause: A macro references a device ID that is not present in the current device graph/registry.
+  - Action: Update the device ID, or connect to the correct backend/device graph.
+
+- Error 1022: "Error 1022: Device '%s' is in state '%s' (must be nominal to run)."
+  - Cause: Macro attempted to run an action while a device is not in a safe/nominal state.
+  - Action: Wait for devices to return to nominal or adjust safe-state steps.
+
+- Error 1023: "Error 1023: Params must be an object."
+  - Cause: Macro step params are malformed or non-JSON-object.
+  - Action: Edit the step params to be a JSON object.
+
+- Error 1024: "Error 1024: Wait seconds must be >= 0."
+  - Cause: Negative or non-finite wait duration.
+  - Action: Enter a non-negative number.
+
+- Error 1025: "Error 1025: Missing required field '%s'."
+  - Cause: Condition is missing required fields (e.g., deviceId/metric).
+  - Action: Fill in the missing condition fields.
+
+- Error 1026: "Error 1026: Metric '%s' not available on device '%s'."
+  - Cause: Macro condition or record stream references a metric not present in the device descriptor.
+  - Action: Choose a valid metric for the selected device.
+
+- Error 1027: "Error 1027: Timeout must be > 0."
+  - Cause: Non-positive timeout for wait/loop.
+  - Action: Enter a positive timeout.
+
+- Error 1028: "Error 1028: Record requires at least one stream."
+  - Cause: Record block has no configured streams.
+  - Action: Add at least one stream (device + rate + metrics).
+
+- Error 1029: "Error 1029: Stream %d: %s"
+  - Cause: Invalid record stream config (missing device, invalid rate, unsupported metric).
+  - Action: Fix the stream entry; UI highlights the invalid stream.
+
+- Error 1030: "Error 1030: Invalid JSON."
+  - Cause: User entered malformed JSON in a JSON input/prompt.
+  - Action: Fix JSON syntax (quotes, braces, commas) and retry.
+
 #### 1100-1199 — Build-mode / parts browser errors
 
 - Error 1100: "Error 1100: Cannot overwrite builtin part '%s' without Save-As-New."
   - Cause: Attempt to save a modified part with an existing builtin name without `save_as_new`.
   - Action: Use Save-As-New and supply a new unique name.
+
+- Error 1190: "Error 1190: Feature not implemented: %s."
+  - Cause: The UI path is present but the feature is not yet implemented.
+  - Action: Use an alternative workflow or update to a version where the feature is implemented.
 
 #### 2000-2199 — Device read & status errors
 

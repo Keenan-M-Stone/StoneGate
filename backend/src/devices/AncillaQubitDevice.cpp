@@ -11,7 +11,12 @@ nlohmann::json AncillaQubitDevice::descriptor() const {
         {"id", dev_id},
         {"type", "ancilla_qubit"},
         {"role", role},
-        {"status", "ok"}
+        {"status", "ok"},
+        {"specs", { {"max_sampling_rate_hz", 50.0} }},
+        {"metrics", {
+            {"state", { {"kind", "integer"}, {"unit", "bit"}, {"backend_unit", "bit"}, {"min", 0.0}, {"max", 1.0} }},
+            {"role", { {"kind", "string"} }}
+        }}
     };
 }
 

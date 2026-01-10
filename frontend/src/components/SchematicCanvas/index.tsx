@@ -7,6 +7,7 @@ import deviceGraph from '../../../../shared/protocol/DeviceGraph.json'
 import ComponentNode from './ComponentNode'
 import Wire from './Wire'
 import { PanZoomContainer } from '../../utils/usePanZoom'
+import { UiErrors } from '../../utils/errorCatalog'
 
 export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenDialog }:{ buildMode?:boolean, onSelectNode?: (id?:string|null)=>void, onOpenDialog?: (id:string)=>void }) {
   const devices = useDeviceStore(s => s.devices)
@@ -18,7 +19,6 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
   const edges = deviceGraph.edges || []
 
   const handleSelect = (id:string|null) => { setSelected(id); if (onSelectNode) onSelectNode(id); }
-  const handleDouble = (id:string) => { if (onOpenDialog) onOpenDialog(id); }
 
   // compute canvas size from graph extents so we can make it scrollable
   const padding = 80
@@ -40,12 +40,38 @@ export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenD
     setNodeSizes(s => ({ ...s, [id]: { width: Math.max(48, Math.round(w)), height: Math.max(32, Math.round(h)) } }))
   }
 
+  // minimap rendering: simple shapes only (no foreignObject)
+  const miniMapContent = (
+    <g transform={`translate(${padding + minX }, ${padding - minY})`}>
+      {edges.map((e:any, i:number) => {
+        const from = nodes.find((n:any)=>n.id===e.from)
+        const to   = nodes.find((n:any)=>n.id===e.to)
+        if (!from || !to) return null
+        return <line key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke='#7aa2ff' strokeOpacity={0.35} strokeWidth={6} />
+      })}
+      {nodes.map((n:any) => {
+        const size = getNodeSize(n.id)
+        const x = n.x - size.width/2
+        const y = n.y - size.height/2
+        return (
+          <g key={n.id}>
+            <rect x={x} y={y} width={size.width} height={size.height} rx={18} ry={18} fill='#14314a' fillOpacity={0.6} stroke='#2b7' strokeOpacity={0.25} strokeWidth={6} />
+          </g>
+        )
+      })}
+    </g>
+  )
+
 return (
   <PanZoomContainer
+    contentWidth={viewWidth}
+    contentHeight={viewHeight}
+    buildMode={buildMode}
+    miniMapContent={miniMapContent}
     style={{
       width: '100%',
-      height: '70vh',          // enough vertical room; adjust as needed
-      overflow: 'hidden',       // Pan/Zoom should manage movement, not scrollbars
+      height: '70vh',
+      overflow: 'hidden',
       background: '#071028',
       borderRadius: 8,
     }}
@@ -92,7 +118,7 @@ return (
                   <div style={{ position:'absolute', right:6, top:6, zIndex:50 }}>
                     <div style={{ display:'flex', gap:6 }}>
                       <button onClick={(e)=>{ e.stopPropagation(); onOpenDialog?.(n.id) }}>Inspect</button>
-                      <button onClick={(e)=>{ e.stopPropagation(); alert('Manual Control not implemented yet') }}>Manual</button>
+                      <button onClick={(e)=>{ e.stopPropagation(); alert(UiErrors.featureNotImplemented('Manual Control')) }}>Manual</button>
                       {buildMode && (
                         <button
                           onClick={(e)=>{

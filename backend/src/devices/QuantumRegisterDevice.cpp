@@ -11,7 +11,11 @@ nlohmann::json QuantumRegisterDevice::descriptor() const {
         {"id", dev_id},
         {"type", "quantum_register"},
         {"size", reg_size},
-        {"status", "ok"}
+        {"status", "ok"},
+        {"specs", { {"max_sampling_rate_hz", 2.0} }},
+        {"metrics", {
+            {"state_vector", { {"kind", "vector"} }}
+        }}
     };
 }
 

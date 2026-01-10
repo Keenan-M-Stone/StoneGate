@@ -4,6 +4,8 @@
 #include "simulator/SimulatedDevice.hpp"
 #include "devices/ThermocoupleDevice.hpp"
 #include "devices/LN2CoolingControllerDevice.hpp"
+
+#include <toolkit/IDeviceToolkit.hpp>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -13,8 +15,13 @@
 using nlohmann::json;
 using namespace std;
 
+
 Simulator::Simulator(uint64_t seed)
-: seed_(seed) {}
+    : seed_(seed) {}
+
+void Simulator::register_toolkit(std::shared_ptr<IDeviceToolkit> toolkit) {
+    toolkits_.push_back(toolkit);
+}
 
 bool Simulator::load_from_graph(const std::string& deviceGraphPath, DeviceRegistry& registry) {
     try {
@@ -74,20 +81,24 @@ bool Simulator::load_from_graph(const std::string& deviceGraphPath, DeviceRegist
             // register in physics engine
             phys_.register_node(id, n, partSpec);
 
-            // create simulated device with provided seed (or 0) and physics hook
-            uint64_t device_seed = seed_ ? seed_ + std::hash<std::string>{}(id) : 0;
-            // If concrete backend device classes exist for this type, instantiate them so they can
-            // integrate with the PhysicsEngine (e.g., LN2 controller and Thermocouple).
-            if (type == "Thermocouple") {
-                auto dev = std::make_shared<ThermocoupleDevice>(id, &phys_);
-                registry.register_device(dev);
-            } else if (type == "LN2CoolingController" || type == "LN2CoolingControllerDevice" || type == "ln2_cooling_controller") {
-                auto dev = std::make_shared<LN2CoolingControllerDevice>(id, &phys_);
-                registry.register_device(dev);
-            } else {
-                auto dev = std::make_shared<SimulatedDevice>(id, type, props, device_seed, &phys_);
-                registry.register_device(dev);
+            // create device using toolkits if possible
+            std::shared_ptr<Device> dev = nullptr;
+            for (auto& tk : toolkits_) {
+                dev = tk->create_device(id, type, n, &phys_);
+                if (dev) break;
             }
+            if (!dev) {
+                // fallback to built-in types
+                uint64_t device_seed = seed_ ? seed_ + std::hash<std::string>{}(id) : 0;
+                if (type == "Thermocouple") {
+                    dev = std::make_shared<ThermocoupleDevice>(id, &phys_);
+                } else if (type == "LN2CoolingController" || type == "LN2CoolingControllerDevice" || type == "ln2_cooling_controller") {
+                    dev = std::make_shared<LN2CoolingControllerDevice>(id, &phys_);
+                } else {
+                    dev = std::make_shared<SimulatedDevice>(id, type, props, device_seed, &phys_);
+                }
+            }
+            if (dev) registry.register_device(dev);
         }
 
         // register edges

@@ -2,6 +2,9 @@
 #include "DescriptorProtocol.hpp"
 #include "DeviceRegistry.hpp"
 #include "simulator/SimulatedDevice.hpp"
+#include "core/Recorder.hpp"
+#include "core/BuildInfo.hpp"
+#include "core/ErrorCatalog.hpp"
 #include <iostream>
 #include <chrono>
 // Boost.Beast / Asio for WebSocket
@@ -11,12 +14,22 @@
 #include <boost/asio/strand.hpp>
 #include <mutex>
 #include <set>
+#include <random>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // not used but conventional
 namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
 namespace asio = boost::asio;           // from <boost/asio.hpp>
 using tcp = asio::ip::tcp;              // from <boost/asio/ip/tcp.hpp>
+
+static std::string sg_random_id() {
+    static thread_local std::mt19937_64 rng{std::random_device{}()};
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    out.reserve(32);
+    for (int i = 0; i < 32; ++i) out.push_back(hex[(rng() >> (i % 8) * 8) & 0xF]);
+    return out;
+}
 
 WebSocketServer::WebSocketServer(int p, DeviceRegistry& reg)
 : port(p), running(false), registry(reg) {}
@@ -76,6 +89,7 @@ void WebSocketServer::start() {
     if (running) return;
     running = true;
     protocol = std::make_unique<DescriptorProtocol>(registry);
+    recorder = std::make_unique<stonegate::Recorder>(registry, port);
 
     // initialize impl with port and start event loop
     impl = std::make_shared<Impl>(port);
@@ -88,6 +102,7 @@ void WebSocketServer::stop() {
     running = false;
     if (event_thread.joinable()) event_thread.join();
     if (broadcast_thread.joinable()) broadcast_thread.join();
+    recorder.reset();
 }
 
 void WebSocketServer::run_event_loop() {
@@ -112,6 +127,17 @@ void WebSocketServer::run_event_loop() {
                             return;
                         }
                         impl->add_session(ws);
+
+                        // Send a descriptor snapshot on connect for discovery.
+                        try {
+                            auto msgj = protocol->build_descriptor_message();
+                            auto payload = msgj.dump();
+                            asio::post(ws->get_executor(), [ws, payload]() {
+                                boost::system::error_code ec;
+                                ws->write(asio::buffer(payload), ec);
+                            });
+                        } catch (...) {}
+
                         // Start a read loop to keep the connection alive and receive control messages
                         auto buffer = std::make_shared<beast::flat_buffer>();
                         auto do_read = std::make_shared<std::function<void()>>();
@@ -125,7 +151,16 @@ void WebSocketServer::run_event_loop() {
                                     auto data = beast::buffers_to_string(buffer->data());
                                     buffer->consume(buffer->size());
                                     auto j = nlohmann::json::parse(data);
-                                    handle_control(j);
+                                    auto reply = [ws](const nlohmann::json& out) {
+                                        try {
+                                            auto payload = out.dump();
+                                            asio::post(ws->get_executor(), [ws, payload]() {
+                                                boost::system::error_code ec;
+                                                ws->write(asio::buffer(payload), ec);
+                                            });
+                                        } catch (...) {}
+                                    };
+                                    handle_message(j, reply);
                                 } catch (...) {}
                                 (*do_read)();
                             });
@@ -162,8 +197,29 @@ void WebSocketServer::run_event_loop() {
 }
 
 void WebSocketServer::handle_control(const nlohmann::json& msg) {
+    auto noop = [](const nlohmann::json&){};
+    handle_message(msg, noop);
+}
+
+void WebSocketServer::handle_message(const nlohmann::json& msg, const std::function<void(const nlohmann::json&)>& reply) {
     try {
-        if (msg.contains("cmd") && msg["cmd"] == "reload_overrides") {
+        const auto type = msg.value("type", std::string{});
+        const auto cmd = msg.value("cmd", std::string{});
+
+        auto rpc_error = [&](const std::string& id, int code, const std::string& message, const nlohmann::json& details = nlohmann::json::object()) {
+            reply({
+                {"type", "rpc_result"},
+                {"id", id},
+                {"ok", false},
+                {"error", { {"code", stonegate::errors::code_string(code)}, {"message", message}, {"details", details} }}
+            });
+        };
+        auto rpc_ok = [&](const std::string& id, const nlohmann::json& result) {
+            reply({ {"type", "rpc_result"}, {"id", id}, {"ok", true}, {"result", result} });
+        };
+
+        // Legacy / control commands
+        if (cmd == "reload_overrides") {
             bool any = false;
             registry.for_each_device([&](std::shared_ptr<Device> d){
                 auto sd = std::dynamic_pointer_cast<SimulatedDevice>(d);
@@ -171,10 +227,139 @@ void WebSocketServer::handle_control(const nlohmann::json& msg) {
                     if (sd->trigger_reload_overrides()) any = true;
                 }
             });
-            std::cout << "WebSocketServer: reload_overrides triggered via control (any=" << any << ")\n";
+            reply({ {"type", "control_ack"}, {"cmd", "reload_overrides"}, {"ok", true}, {"any", any} });
+            return;
+        }
+
+        // Manual device action (control channel)
+        if (cmd == "action" || cmd == "device_action") {
+            const auto device_id = msg.value("device_id", std::string{});
+            if (device_id.empty()) {
+                reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", false}, {"error", stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_DEVICE_ID)} });
+                return;
+            }
+            if (!msg.contains("action") || !msg["action"].is_object()) {
+                reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", false}, {"error", stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_ACTION)} });
+                return;
+            }
+            auto dev = registry.get_device(device_id);
+            if (!dev) {
+                reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", false}, {"error", stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_UNKNOWN_DEVICE)}, {"device_id", device_id} });
+                return;
+            }
+            dev->perform_action(msg["action"]);
+            reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", true}, {"device_id", device_id} });
+            return;
+        }
+
+        // RPC (toolbox API)
+        if (type == "rpc") {
+            const auto id = msg.value("id", std::string{});
+            if (id.empty()) {
+                // id is required so clients can correlate responses
+                rpc_error(sg_random_id(), stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RPC_MISSING_ID), { {"detail", stonegate::errors::D2400_RPC_MISSING_ID} });
+                return;
+            }
+            const auto method = msg.value("method", std::string{});
+            const auto params = msg.value("params", nlohmann::json::object());
+            if (method.empty()) {
+                rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RPC_MISSING_METHOD), { {"detail", stonegate::errors::D2400_RPC_MISSING_METHOD} });
+                return;
+            }
+
+            if (method == "devices.list") {
+                rpc_ok(id, { {"devices", registry.get_descriptor_graph()} });
+                return;
+            }
+            if (method == "devices.poll") {
+                rpc_ok(id, { {"updates", registry.poll_all()} });
+                return;
+            }
+            if (method == "backend.info") {
+                rpc_ok(id, {
+                    {"port", port},
+                    {"git_commit", stonegate::buildinfo::git_commit()},
+                    {"build_time", stonegate::buildinfo::build_time_utc_approx()}
+                });
+                return;
+            }
+            if (method == "device.action") {
+                const auto device_id = params.value("device_id", std::string{});
+                if (device_id.empty()) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_DEVICE_ID), { {"detail", stonegate::errors::D2400_MISSING_DEVICE_ID} }); return; }
+                if (!params.contains("action") || !params["action"].is_object()) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_ACTION), { {"detail", stonegate::errors::D2400_MISSING_ACTION} }); return; }
+                auto dev = registry.get_device(device_id);
+                if (!dev) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_UNKNOWN_DEVICE), { {"detail", stonegate::errors::D2400_UNKNOWN_DEVICE}, {"device_id", device_id} }); return; }
+                dev->perform_action(params["action"]);
+                rpc_ok(id, { {"device_id", device_id}, {"applied", true} });
+                return;
+            }
+            if (method == "record.start") {
+                if (!recorder) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RECORDER_NOT_INITIALIZED), { {"detail", stonegate::errors::D2400_RECORDER_NOT_INITIALIZED} }); return; }
+                try {
+                    auto res = recorder->start(params);
+                    rpc_ok(id, { {"recording_id", res.recording_id}, {"path", res.path} });
+                } catch (const std::exception& e) {
+                    const std::string detail = e.what();
+                    rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(detail), { {"detail", detail} });
+                }
+                return;
+            }
+            if (method == "record.stop") {
+                if (!recorder) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RECORDER_NOT_INITIALIZED), { {"detail", stonegate::errors::D2400_RECORDER_NOT_INITIALIZED} }); return; }
+                const auto recording_id = params.value("recording_id", std::string{});
+                if (recording_id.empty()) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_RECORDING_ID), { {"detail", stonegate::errors::D2400_MISSING_RECORDING_ID} }); return; }
+                auto out = recorder->stop(recording_id);
+                if (!out) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_UNKNOWN_RECORDING_ID), { {"detail", stonegate::errors::D2400_UNKNOWN_RECORDING_ID}, {"recording_id", recording_id} }); return; }
+                rpc_ok(id, {
+                    {"recording_id", out->recording_id},
+                    {"path", out->path},
+                    {"samples_written", out->samples_written},
+                    {"started_ts_ms", out->started_ts_ms},
+                    {"stopped_ts_ms", out->stopped_ts_ms}
+                });
+                return;
+            }
+            if (method == "qec.decode") {
+                // Minimal, deterministic stub: majority vote per qubit across measurements.
+                // Input loosely follows shared/protocol/MessageTypes.ts QECRequest.
+                nlohmann::json req = params;
+                nlohmann::json meas = req.value("measurements", nlohmann::json::array());
+                if (!meas.is_array()) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_QEC_MEASUREMENTS_NOT_ARRAY), { {"detail", stonegate::errors::D2400_QEC_MEASUREMENTS_NOT_ARRAY} }); return; }
+
+                std::unordered_map<int, std::pair<int,int>> counts; // qubit -> {zeros, ones}
+                for (const auto& m : meas) {
+                    if (!m.is_object()) continue;
+                    int q = m.value("qubit", -1);
+                    int v = m.value("value", -1);
+                    if (q < 0) continue;
+                    if (v == 0) counts[q].first += 1;
+                    if (v == 1) counts[q].second += 1;
+                }
+                nlohmann::json corrections = nlohmann::json::array();
+                for (const auto& [q, z1] : counts) {
+                    int correction = (z1.second > z1.first) ? 1 : 0;
+                    corrections.push_back({ {"qubit", q}, {"round", 0}, {"correction", correction} });
+                }
+                nlohmann::json result = {
+                    {"job_id", req.value("job_id", id)},
+                    {"status", "done"},
+                    {"corrections", corrections},
+                    {"statistics", { {"qubits", (int)counts.size()}, {"measurements", (int)meas.size()} } }
+                };
+                rpc_ok(id, result);
+                return;
+            }
+
+            rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RPC_UNKNOWN_METHOD), { {"detail", stonegate::errors::D2400_RPC_UNKNOWN_METHOD}, {"method", method} });
+            return;
+        }
+
+        // Unknown message: ignore but optionally ack if it looks like control.
+        if (!cmd.empty()) {
+            reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", false}, {"error", stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_INVALID_REQUEST)} });
         }
     } catch (const std::exception& e) {
-        std::cerr << "handle_control error: " << e.what() << std::endl;
+        std::cerr << "handle_message error: " << e.what() << std::endl;
     }
 }
 

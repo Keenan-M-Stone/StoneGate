@@ -15,8 +15,27 @@ nlohmann::json LN2CoolingControllerDevice::descriptor() const {
         {"specs", {
             {"setpoint_range_K", {60, 300}},
             {"max_flow_rate", 10.0},
+            {"max_sampling_rate_hz", 5.0},
             {"manufacturer", "Stone Labs: CryoTech division"},
             {"datasheet_url", "https://example.com/ln2controller"}
+        }},
+        {"metrics", {
+            {"temperature_K", {
+                {"kind", "number"},
+                {"unit", "K"},
+                {"backend_unit", "K"},
+                {"precision", 0.1},
+                {"min", 0.0},
+                {"max", 500.0}
+            }},
+            {"flow_rate_Lmin", {
+                {"kind", "number"},
+                {"unit", "L/min"},
+                {"backend_unit", "L/min"},
+                {"precision", 0.1},
+                {"min", 0.0},
+                {"max", 10.0}
+            }}
         }}
     };
 }

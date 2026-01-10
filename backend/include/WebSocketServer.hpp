@@ -8,6 +8,7 @@
 
 class DescriptorProtocol;
 class DeviceRegistry;
+namespace stonegate { class Recorder; }
 
 class WebSocketServer {
 public:
@@ -18,6 +19,8 @@ public:
     void stop();
     // Handle control messages (from websocket or other control channel)
     void handle_control(const nlohmann::json& msg);
+    // Handle messages that may need a reply (WebSocket).
+    void handle_message(const nlohmann::json& msg, const std::function<void(const nlohmann::json&)>& reply);
 
 private:
     void run_event_loop();
@@ -34,4 +37,5 @@ private:
 
     DeviceRegistry& registry;
     std::unique_ptr<DescriptorProtocol> protocol;
+    std::unique_ptr<stonegate::Recorder> recorder;
 };
