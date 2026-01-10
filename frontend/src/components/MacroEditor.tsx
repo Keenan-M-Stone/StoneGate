@@ -518,6 +518,24 @@ export default function MacroEditor() {
     updateMacro(m => ({ ...m, steps: insertAfterStepId(m.steps, afterId, stepDefault(kind)) }))
   }
 
+  type BlockInsertTarget = 'steps' | 'thenSteps' | 'elseSteps'
+  const appendIntoBlock = (blockStepId: string, target: BlockInsertTarget, kind: Step['kind']) => {
+    updateMacro(m => ({
+      ...m,
+      steps: updateStepById(m.steps, blockStepId, s => {
+        const child = stepDefault(kind)
+        if ((s.kind === 'record' || s.kind === 'while') && target === 'steps') {
+          return { ...s, steps: [...s.steps, child] }
+        }
+        if (s.kind === 'ifElse') {
+          if (target === 'thenSteps') return { ...s, thenSteps: [...s.thenSteps, child] }
+          if (target === 'elseSteps') return { ...s, elseSteps: [...s.elseSteps, child] }
+        }
+        return s
+      }),
+    }))
+  }
+
   const deleteStep = (stepId: string) => {
     updateMacro(m => ({ ...m, steps: deleteStepById(m.steps, stepId) }))
     setStepStatus(prev => {
@@ -970,6 +988,37 @@ export default function MacroEditor() {
     e.preventDefault()
     setSelectedStepId(step.id)
     const editable = canEditStep(step.id)
+    const addInsideItems: Array<{ label: string; onClick: () => void; disabled?: boolean }> = []
+
+    if (step.kind === 'record' || step.kind === 'while') {
+      const prefix = step.kind === 'record' ? 'Add Inside Record: ' : 'Add Inside While: '
+      addInsideItems.push(
+        { label: `${prefix}Device Action`, onClick: () => appendIntoBlock(step.id, 'steps', 'deviceAction'), disabled: !editable },
+        { label: `${prefix}Wait For Stable`, onClick: () => appendIntoBlock(step.id, 'steps', 'waitForStable'), disabled: !editable },
+        { label: `${prefix}Sleep`, onClick: () => appendIntoBlock(step.id, 'steps', 'sleep'), disabled: !editable },
+        { label: `${prefix}Record Block`, onClick: () => appendIntoBlock(step.id, 'steps', 'record'), disabled: !editable },
+        { label: `${prefix}While Block`, onClick: () => appendIntoBlock(step.id, 'steps', 'while'), disabled: !editable },
+        { label: `${prefix}If/Else Block`, onClick: () => appendIntoBlock(step.id, 'steps', 'ifElse'), disabled: !editable }
+      )
+    }
+
+    if (step.kind === 'ifElse') {
+      addInsideItems.push(
+        { label: `Add Inside THEN: Device Action`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'deviceAction'), disabled: !editable },
+        { label: `Add Inside THEN: Wait For Stable`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'waitForStable'), disabled: !editable },
+        { label: `Add Inside THEN: Sleep`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'sleep'), disabled: !editable },
+        { label: `Add Inside THEN: Record Block`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'record'), disabled: !editable },
+        { label: `Add Inside THEN: While Block`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'while'), disabled: !editable },
+        { label: `Add Inside THEN: If/Else Block`, onClick: () => appendIntoBlock(step.id, 'thenSteps', 'ifElse'), disabled: !editable },
+        { label: `Add Inside ELSE: Device Action`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'deviceAction'), disabled: !editable },
+        { label: `Add Inside ELSE: Wait For Stable`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'waitForStable'), disabled: !editable },
+        { label: `Add Inside ELSE: Sleep`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'sleep'), disabled: !editable },
+        { label: `Add Inside ELSE: Record Block`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'record'), disabled: !editable },
+        { label: `Add Inside ELSE: While Block`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'while'), disabled: !editable },
+        { label: `Add Inside ELSE: If/Else Block`, onClick: () => appendIntoBlock(step.id, 'elseSteps', 'ifElse'), disabled: !editable }
+      )
+    }
+
     setMenu({
       x: e.clientX,
       y: e.clientY,
@@ -981,6 +1030,7 @@ export default function MacroEditor() {
         { label: 'Insert After: Record Block', onClick: () => insertAfter(step.id, 'record'), disabled: !editable },
         { label: 'Insert After: While Block', onClick: () => insertAfter(step.id, 'while'), disabled: !editable },
         { label: 'Insert After: If/Else Block', onClick: () => insertAfter(step.id, 'ifElse'), disabled: !editable },
+        ...addInsideItems,
         { label: 'Delete', onClick: () => deleteStep(step.id), disabled: !editable },
       ],
     })
@@ -991,6 +1041,10 @@ export default function MacroEditor() {
   const [jsonError, setJsonError] = React.useState<string>('')
 
   const [showSafeStateDialog, setShowSafeStateDialog] = React.useState(false)
+
+  type ExportChoice = 'selected-json' | 'all-json' | 'python' | 'cpp' | 'notebook'
+  const [showExportDialog, setShowExportDialog] = React.useState(false)
+  const [exportChoice, setExportChoice] = React.useState<ExportChoice>('python')
 
   const [uiDeviceActionDialog, setUiDeviceActionDialog] = React.useState<
     | null
@@ -1046,6 +1100,12 @@ export default function MacroEditor() {
     downloadJson(`${selectedMacro.name.replace(/[^a-z0-9_-]+/gi, '_')}.json`, selectedMacro)
   }
 
+  const openExportDialog = () => {
+    if (!selectedMacro && macros.length === 0) return
+    if (!selectedMacro) setExportChoice('all-json')
+    setShowExportDialog(true)
+  }
+
   const renderFullMacroText = React.useCallback(
     (m: ScriptMacro, as: NonNullable<ScriptMacro['renderAs']>) => {
       if (as === 'json' || as === 'ui') return JSON.stringify(m, null, 2)
@@ -1074,7 +1134,7 @@ export default function MacroEditor() {
             const deviceId = s.device_id || ''
             const actionObj = s.action ?? {}
             out.push(`${pad(indent)}# ###> "${escPy(s.name)}" <###`)
-            out.push(`${pad(indent)}await device_action("${escPy(deviceId)}", ${pyJsonLoadsExpr(actionObj)})`)
+            out.push(`${pad(indent)}await sg.device_action("${escPy(deviceId)}", ${pyJsonLoadsExpr(actionObj)})`)
             continue
           }
           if (s.kind === 'sleep') {
@@ -1085,7 +1145,7 @@ export default function MacroEditor() {
           if (s.kind === 'waitForStable') {
             out.push(`${pad(indent)}# ###> "${escPy(s.name)}" <###`)
             out.push(
-              `${pad(indent)}await wait_for_stable(` +
+              `${pad(indent)}await sg.wait_for_stable(` +
                 `device_id="${escPy(s.device_id)}", metric="${escPy(s.metric)}", ` +
                 `tolerance=${s.tolerance}, window_s=${Math.max(0.2, s.window_ms / 1000)}, consecutive=${Math.max(1, s.consecutive)}, timeout_s=${Math.max(0, s.timeout_ms / 1000)}` +
                 `)`
@@ -1095,12 +1155,12 @@ export default function MacroEditor() {
           if (s.kind === 'record') {
             const ridVar = `rid_${s.id.replace(/[^a-zA-Z0-9_]/g, '_')}`
             out.push(`${pad(indent)}# ###> "${escPy(s.name)}" <### (record block)`)
-            out.push(`${pad(indent)}${ridVar} = await record_start(${pyJsonLoadsExpr(s.params ?? {})})`)
+            out.push(`${pad(indent)}${ridVar} = await sg.record_start(${pyJsonLoadsExpr(s.params ?? {})})`)
             out.push(`${pad(indent)}${activeRecVar}.add(${ridVar})`)
             out.push(`${pad(indent)}try:`)
             out.push(...renderStepsPython(s.steps, indent + 2, activeRecVar))
             out.push(`${pad(indent)}finally:`)
-            out.push(`${pad(indent + 2)}await record_stop(${ridVar})`)
+            out.push(`${pad(indent + 2)}await sg.record_stop(${ridVar})`)
             out.push(`${pad(indent + 2)}${activeRecVar}.discard(${ridVar})`)
             continue
           }
@@ -1108,16 +1168,16 @@ export default function MacroEditor() {
             const maxIt = Math.max(1, s.max_iterations)
             out.push(`${pad(indent)}# ###> "${escPy(s.name)}" <### (while block)`)
             out.push(`${pad(indent)}for _i in range(${maxIt}):`)
-            out.push(`${pad(indent + 2)}latest = await get_latest_number("${escPy(s.condition.device_id)}", "${escPy(s.condition.metric)}")`)
-            out.push(`${pad(indent + 2)}if not eval_condition(latest, "${escPy(s.condition.op)}", ${s.condition.value}):`)
+            out.push(`${pad(indent + 2)}latest = await sg.get_latest_number("${escPy(s.condition.device_id)}", "${escPy(s.condition.metric)}")`)
+            out.push(`${pad(indent + 2)}if not sg.eval_condition(latest, "${escPy(s.condition.op)}", ${s.condition.value}):`)
             out.push(`${pad(indent + 4)}break`)
             out.push(...renderStepsPython(s.steps, indent + 2, activeRecVar))
             continue
           }
           if (s.kind === 'ifElse') {
             out.push(`${pad(indent)}# ###> "${escPy(s.name)}" <### (if/else block)`)
-            out.push(`${pad(indent)}latest = await get_latest_number("${escPy(s.condition.device_id)}", "${escPy(s.condition.metric)}")`)
-            out.push(`${pad(indent)}if eval_condition(latest, "${escPy(s.condition.op)}", ${s.condition.value}):`)
+            out.push(`${pad(indent)}latest = await sg.get_latest_number("${escPy(s.condition.device_id)}", "${escPy(s.condition.metric)}")`)
+            out.push(`${pad(indent)}if sg.eval_condition(latest, "${escPy(s.condition.op)}", ${s.condition.value}):`)
             out.push(...renderStepsPython(s.thenSteps, indent + 2, activeRecVar))
             out.push(`${pad(indent)}else:`)
             out.push(...renderStepsPython(s.elseSteps, indent + 2, activeRecVar))
@@ -1132,125 +1192,22 @@ export default function MacroEditor() {
         const lines: string[] = []
         lines.push(`# Rendered as PYTHON`)
         lines.push(`# Macro: ${m.name}`)
-        lines.push(`# Copy/paste runnable script. Requires: pip install websockets`)
+        lines.push(`# Copy/paste runnable script.`)
+        lines.push(`# Depends on: stonegate_api.py (this repo) + pip install websockets`)
         lines.push('')
         lines.push('import asyncio')
         lines.push('import json')
-        lines.push('import uuid')
-        lines.push('from typing import Any, Dict, Optional, Set')
+        lines.push('import stonegate_api as sg')
         lines.push('')
-        lines.push('import websockets')
-        lines.push('')
-        lines.push("WS_URL = 'ws://localhost:8080/status'")
-        lines.push('')
-        lines.push('async def rpc(method: str, params: Optional[Dict[str, Any]] = None, timeout_s: float = 10.0) -> Any:')
-        lines.push('    rid = f"py_{uuid.uuid4().hex}"')
-        lines.push('    req = {"type": "rpc", "id": rid, "method": method, "params": params or {}}')
-        lines.push('    async with websockets.connect(WS_URL) as ws:')
-        lines.push('        await ws.send(json.dumps(req))')
-        lines.push('        loop = asyncio.get_running_loop()')
-        lines.push('        deadline = loop.time() + float(timeout_s)')
-        lines.push('        while True:')
-        lines.push('            remaining = deadline - loop.time()')
-        lines.push('            if remaining <= 0:')
-        lines.push('                raise TimeoutError(f"RPC timeout: {method}")')
-        lines.push('            msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=remaining))')
-        lines.push('            if msg.get("type") == "rpc_result" and msg.get("id") == rid:')
-        lines.push('                if not msg.get("ok", False):')
-        lines.push('                    raise RuntimeError(msg.get("error"))')
-        lines.push('                return msg.get("result")')
-        lines.push('')
-        lines.push('async def poll_all_flat() -> Dict[str, Dict[str, Any]]:')
-        lines.push('    r = await rpc("devices.poll", {})')
-        lines.push('    out: Dict[str, Dict[str, Any]] = {}')
-        lines.push('    for u in r.get("updates", []):')
-        lines.push('        did = u.get("id")')
-        lines.push('        meas = u.get("measurement") or {}')
-        lines.push('        if isinstance(meas, dict) and "measurements" in meas and isinstance(meas.get("measurements"), dict):')
-        lines.push('            inner = meas.get("measurements")')
-        lines.push('            flat = {k: (v.get("value") if isinstance(v, dict) and "value" in v else v) for k, v in inner.items()}')
-        lines.push('        elif isinstance(meas, dict):')
-        lines.push('            flat = {k: (v.get("value") if isinstance(v, dict) and "value" in v else v) for k, v in meas.items()}')
-        lines.push('        else:')
-        lines.push('            flat = {}')
-        lines.push('        if isinstance(did, str):')
-        lines.push('            out[did] = flat')
-        lines.push('    return out')
-        lines.push('')
-        lines.push('async def device_action(device_id: str, action: Dict[str, Any]) -> Any:')
-        lines.push('    return await rpc("device.action", {"device_id": device_id, "action": action})')
-        lines.push('')
-        lines.push('async def record_start(params: Dict[str, Any]) -> str:')
-        lines.push('    r = await rpc("record.start", params, timeout_s=20.0)')
-        lines.push('    return str(r.get("recording_id", ""))')
-        lines.push('')
-        lines.push('async def record_stop(recording_id: str) -> Any:')
-        lines.push('    if not recording_id:')
-        lines.push('        return None')
-        lines.push('    return await rpc("record.stop", {"recording_id": recording_id}, timeout_s=20.0)')
-        lines.push('')
-        lines.push('def eval_condition(latest: Optional[float], op: str, value: float) -> bool:')
-        lines.push('    if latest is None:')
-        lines.push('        return False')
-        lines.push('    if op == "<": return latest < value')
-        lines.push('    if op == "<=": return latest <= value')
-        lines.push('    if op == ">": return latest > value')
-        lines.push('    if op == ">=": return latest >= value')
-        lines.push('    if op == "==": return latest == value')
-        lines.push('    if op == "!=": return latest != value')
-        lines.push('    raise ValueError(f"Unknown op: {op}")')
-        lines.push('')
-        lines.push('async def get_latest_number(device_id: str, metric: str) -> Optional[float]:')
-        lines.push('    snap = await poll_all_flat()')
-        lines.push('    v = (snap.get(device_id) or {}).get(metric)')
-        lines.push('    try:')
-        lines.push('        return float(v)')
-        lines.push('    except Exception:')
-        lines.push('        return None')
-        lines.push('')
-        lines.push('async def wait_for_stable(device_id: str, metric: str, tolerance: float, window_s: float, consecutive: int, timeout_s: float) -> None:')
-        lines.push('    start = asyncio.get_running_loop().time()')
-        lines.push('    ok = 0')
-        lines.push('    samples: list[float] = []')
-        lines.push('    ts: list[float] = []')
-        lines.push('    while (asyncio.get_running_loop().time() - start) < float(timeout_s):')
-        lines.push('        v = await get_latest_number(device_id, metric)')
-        lines.push('        now = asyncio.get_running_loop().time()')
-        lines.push('        if v is not None:')
-        lines.push('            samples.append(v)')
-        lines.push('            ts.append(now)')
-        lines.push('        while ts and (now - ts[0]) > float(window_s):')
-        lines.push('            ts.pop(0)')
-        lines.push('            samples.pop(0)')
-        lines.push('        if len(samples) >= 2:')
-        lines.push('            if abs(max(samples) - min(samples)) <= float(tolerance):')
-        lines.push('                ok += 1')
-        lines.push('            else:')
-        lines.push('                ok = 0')
-        lines.push('            if ok >= int(consecutive):')
-        lines.push('                return')
-        lines.push('        await asyncio.sleep(min(0.5, max(0.05, float(window_s) / 4)))')
-        lines.push('    raise TimeoutError(f"wait_for_stable timeout: {device_id}:{metric}")')
-        lines.push('')
-        lines.push('async def apply_safe_state(active_recording_ids: Set[str]) -> None:')
-        lines.push('    for rid in list(active_recording_ids):')
-        lines.push('        try:')
-        lines.push('            await rpc("record.stop", {"recording_id": rid}, timeout_s=20.0)')
-        lines.push('        except Exception:')
-        lines.push('            pass')
-        lines.push('        active_recording_ids.discard(rid)')
-        lines.push(`    safe_targets = ${pyJsonLoadsExpr(safeTargets, true)}`)
-        lines.push('    for device_id, params in safe_targets.items():')
-        lines.push('        if not params:')
-        lines.push('            continue')
-        lines.push('        await device_action(device_id, {"set": params})')
+        lines.push("sg.WS_URL = 'ws://localhost:8080/status'")
+        lines.push(`SAFE_TARGETS = ${pyJsonLoadsExpr(safeTargets, true)}`)
         lines.push('')
         lines.push('async def run_macro() -> None:')
-        lines.push('    active_recording_ids: Set[str] = set()')
+        lines.push('    active_recording_ids: set[str] = set()')
         lines.push('    try:')
         lines.push(...renderStepsPython(m.steps, 8, 'active_recording_ids'))
         lines.push('    finally:')
-        lines.push('        await apply_safe_state(active_recording_ids)')
+        lines.push('        await sg.apply_safe_state(active_recording_ids, SAFE_TARGETS)')
         lines.push('')
         lines.push('if __name__ == "__main__":')
         lines.push('    asyncio.run(run_macro())')
@@ -1261,105 +1218,18 @@ export default function MacroEditor() {
         const lines: string[] = []
         lines.push('// Rendered as C++')
         lines.push(`// Macro: ${m.name}`)
-        lines.push('// Copy/paste runnable example using Boost.Beast WebSocket + nlohmann::json.')
-        lines.push('// You need Boost and nlohmann/json available in your build.')
+        lines.push('// Copy/paste runnable example using the repo helper: stonegate_api.hpp')
+        lines.push('// Dependencies for stonegate_api.hpp: Boost + nlohmann::json')
         lines.push('')
-        lines.push('#include <boost/asio.hpp>')
-        lines.push('#include <boost/beast/core.hpp>')
-        lines.push('#include <boost/beast/websocket.hpp>')
-        lines.push('#include <nlohmann/json.hpp>')
+        lines.push('#include "stonegate_api.hpp"')
         lines.push('')
         lines.push('#include <chrono>')
         lines.push('#include <iostream>')
-        lines.push('#include <limits>')
-        lines.push('#include <random>')
         lines.push('#include <string>')
         lines.push('#include <thread>')
         lines.push('#include <unordered_set>')
         lines.push('')
-        lines.push('namespace asio = boost::asio;')
-        lines.push('namespace beast = boost::beast;')
-        lines.push('namespace websocket = beast::websocket;')
-        lines.push('using tcp = asio::ip::tcp;')
-        lines.push('using json = nlohmann::json;')
-        lines.push('')
-        lines.push('static std::string random_id() {')
-        lines.push('  static thread_local std::mt19937_64 rng{std::random_device{}()};')
-        lines.push('  static const char* hex = "0123456789abcdef";')
-        lines.push('  std::string out; out.reserve(32);')
-        lines.push('  for (int i = 0; i < 32; ++i) out.push_back(hex[(rng() >> ((i % 8) * 8)) & 0xF]);')
-        lines.push('  return out;')
-        lines.push('}')
-        lines.push('')
-        lines.push('static json rpc_once(const std::string& host, int port, const std::string& path, const std::string& method, const json& params, int timeout_ms = 10000) {')
-        lines.push('  asio::io_context ioc;')
-        lines.push('  tcp::resolver resolver{ioc};')
-        lines.push('  websocket::stream<tcp::socket> ws{ioc};')
-        lines.push('')
-        lines.push('  auto const results = resolver.resolve(host, std::to_string(port));')
-        lines.push('  asio::connect(ws.next_layer(), results.begin(), results.end());')
-        lines.push('  ws.handshake(host + ":" + std::to_string(port), path);')
-        lines.push('')
-        lines.push('  const std::string id = std::string("cpp_") + random_id();')
-        lines.push('  json req = { {"type","rpc"}, {"id", id}, {"method", method}, {"params", params} };')
-        lines.push('  ws.write(asio::buffer(req.dump()));')
-        lines.push('')
-        lines.push('  beast::flat_buffer buffer;')
-        lines.push('  auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);')
-        lines.push('  while (std::chrono::steady_clock::now() < deadline) {')
-        lines.push('    buffer.consume(buffer.size());')
-        lines.push('    ws.read(buffer);')
-        lines.push('    auto txt = beast::buffers_to_string(buffer.data());')
-        lines.push('    json msg = json::parse(txt, nullptr, false);')
-        lines.push('    if (!msg.is_object()) continue;')
-        lines.push('    if (msg.value("type", "") == "rpc_result" && msg.value("id", "") == id) {')
-        lines.push('      if (!msg.value("ok", false)) {')
-        lines.push('        throw std::runtime_error(msg.value("error", json{}).dump());')
-        lines.push('      }')
-        lines.push('      return msg.value("result", json::object());')
-        lines.push('    }')
-        lines.push('  }')
-        lines.push('  throw std::runtime_error("rpc timeout: " + method);')
-        lines.push('}')
-        lines.push('')
-        lines.push('static void device_action(const std::string& device_id, const json& action) {')
-        lines.push('  (void)rpc_once("localhost", 8080, "/status", "device.action", { {"device_id", device_id}, {"action", action} }, 20000);')
-        lines.push('}')
-        lines.push('')
-        lines.push('static std::string record_start(const json& params) {')
-        lines.push('  auto r = rpc_once("localhost", 8080, "/status", "record.start", params, 20000);')
-        lines.push('  return r.value("recording_id", std::string{});')
-        lines.push('}')
-        lines.push('')
-        lines.push('static void record_stop(const std::string& recording_id) {')
-        lines.push('  if (recording_id.empty()) return;')
-        lines.push('  (void)rpc_once("localhost", 8080, "/status", "record.stop", { {"recording_id", recording_id} }, 20000);')
-        lines.push('}')
-        lines.push('')
-        lines.push('static bool eval_condition(double latest, const std::string& op, double value) {')
-        lines.push('  if (op == "<") return latest < value;')
-        lines.push('  if (op == "<=") return latest <= value;')
-        lines.push('  if (op == ">") return latest > value;')
-        lines.push('  if (op == ">=") return latest >= value;')
-        lines.push('  if (op == "==") return latest == value;')
-        lines.push('  if (op == "!=") return latest != value;')
-        lines.push('  return false;')
-        lines.push('}')
-        lines.push('')
-        lines.push('static double get_latest_number(const std::string& device_id, const std::string& metric) {')
-        lines.push('  auto r = rpc_once("localhost", 8080, "/status", "devices.poll", json::object(), 10000);')
-        lines.push('  for (const auto& u : r.value("updates", json::array())) {')
-        lines.push('    if (u.value("id", "") != device_id) continue;')
-        lines.push('    auto meas = u.value("measurement", json::object());')
-        lines.push('    if (meas.contains("measurements") && meas["measurements"].is_object()) meas = meas["measurements"];')
-        lines.push('    if (!meas.contains(metric)) break;')
-        lines.push('    auto v = meas[metric];')
-        lines.push('    if (v.is_object() && v.contains("value")) v = v["value"];')
-        lines.push('    if (v.is_number()) return v.get<double>();')
-        lines.push('    break;')
-        lines.push('  }')
-        lines.push('  return std::numeric_limits<double>::quiet_NaN();')
-        lines.push('}')
+        lines.push('using json = stonegate::json;')
         lines.push('')
         lines.push('static void sleep_ms(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(std::max(0, ms))); }')
         lines.push('')
@@ -1373,7 +1243,7 @@ export default function MacroEditor() {
             }
             if (s.kind === 'deviceAction') {
               out.push(`${pad(indent)}// ###> "${escCpp(s.name)}" <###`)
-              out.push(`${pad(indent)}device_action("${escCpp(s.device_id || '')}", json::parse(R"JSON(${JSON.stringify(s.action ?? {})})JSON"));`)
+              out.push(`${pad(indent)}client.device_action("${escCpp(s.device_id || '')}", json::parse(R"JSON(${JSON.stringify(s.action ?? {})})JSON"));`)
               continue
             }
             if (s.kind === 'sleep') {
@@ -1383,20 +1253,25 @@ export default function MacroEditor() {
             }
             if (s.kind === 'waitForStable') {
               out.push(`${pad(indent)}// ###> "${escCpp(s.name)}" <###`)
-              out.push(`${pad(indent)}(void)get_latest_number("${escCpp(s.device_id)}", "${escCpp(s.metric)}"); // TODO: stable loop`)
+              out.push(
+                `${pad(indent)}client.wait_for_stable(` +
+                  `"${escCpp(s.device_id)}", "${escCpp(s.metric)}", ` +
+                  `${s.tolerance}, ${Math.max(0.2, s.window_ms / 1000)}, ${Math.max(1, s.consecutive)}, ${Math.max(0, s.timeout_ms) / 1000}` +
+                  `);`
+              )
               continue
             }
             if (s.kind === 'record') {
               const ridVar = `rid_${s.id.replace(/[^a-zA-Z0-9_]/g, '_')}`
               out.push(`${pad(indent)}// ###> "${escCpp(s.name)}" <### (record block)`)
-              out.push(`${pad(indent)}std::string ${ridVar} = record_start(json::parse(R"JSON(${JSON.stringify(s.params ?? {})})JSON"));`)
+              out.push(`${pad(indent)}std::string ${ridVar} = client.record_start(json::parse(R"JSON(${JSON.stringify(s.params ?? {})})JSON"));`)
               out.push(`${pad(indent)}${activeRecVar}.insert(${ridVar});`)
               out.push(`${pad(indent)}try {`)
               out.push(...renderStepsCpp(s.steps, indent + 2, activeRecVar))
               out.push(`${pad(indent)}} catch (...) {`)
-              out.push(`${pad(indent + 2)}record_stop(${ridVar}); ${activeRecVar}.erase(${ridVar}); throw;`)
+              out.push(`${pad(indent + 2)}client.record_stop(${ridVar}); ${activeRecVar}.erase(${ridVar}); throw;`)
               out.push(`${pad(indent)}}`)
-              out.push(`${pad(indent)}record_stop(${ridVar});`)
+              out.push(`${pad(indent)}client.record_stop(${ridVar});`)
               out.push(`${pad(indent)}${activeRecVar}.erase(${ridVar});`)
               continue
             }
@@ -1404,8 +1279,8 @@ export default function MacroEditor() {
               const maxIt = Math.max(1, s.max_iterations)
               out.push(`${pad(indent)}// ###> "${escCpp(s.name)}" <### (while block)`)
               out.push(`${pad(indent)}for (int i = 0; i < ${maxIt}; ++i) {`)
-              out.push(`${pad(indent + 2)}double latest = get_latest_number("${escCpp(s.condition.device_id)}", "${escCpp(s.condition.metric)}");`)
-              out.push(`${pad(indent + 2)}if (!eval_condition(latest, "${escCpp(s.condition.op)}", ${s.condition.value})) break;`)
+              out.push(`${pad(indent + 2)}double latest = client.get_latest_number("${escCpp(s.condition.device_id)}", "${escCpp(s.condition.metric)}");`)
+              out.push(`${pad(indent + 2)}if (!stonegate::Client::eval_condition(latest, "${escCpp(s.condition.op)}", ${s.condition.value})) break;`)
               out.push(...renderStepsCpp(s.steps, indent + 2, activeRecVar))
               out.push(`${pad(indent)}}`)
               continue
@@ -1413,8 +1288,8 @@ export default function MacroEditor() {
             if (s.kind === 'ifElse') {
               out.push(`${pad(indent)}// ###> "${escCpp(s.name)}" <### (if/else block)`)
               out.push(`${pad(indent)}{`)
-              out.push(`${pad(indent + 2)}double latest = get_latest_number("${escCpp(s.condition.device_id)}", "${escCpp(s.condition.metric)}");`)
-              out.push(`${pad(indent + 2)}if (eval_condition(latest, "${escCpp(s.condition.op)}", ${s.condition.value})) {`)
+              out.push(`${pad(indent + 2)}double latest = client.get_latest_number("${escCpp(s.condition.device_id)}", "${escCpp(s.condition.metric)}");`)
+              out.push(`${pad(indent + 2)}if (stonegate::Client::eval_condition(latest, "${escCpp(s.condition.op)}", ${s.condition.value})) {`)
               out.push(...renderStepsCpp(s.thenSteps, indent + 4, activeRecVar))
               out.push(`${pad(indent + 2)}} else {`)
               out.push(...renderStepsCpp(s.elseSteps, indent + 4, activeRecVar))
@@ -1427,28 +1302,16 @@ export default function MacroEditor() {
           return out
         }
 
-        lines.push('static void apply_safe_state(std::unordered_set<std::string>& active_recording_ids) {')
-        lines.push('  for (auto it = active_recording_ids.begin(); it != active_recording_ids.end(); ) {')
-        lines.push('    try { record_stop(*it); } catch (...) {}')
-        lines.push('    it = active_recording_ids.erase(it);')
-        lines.push('  }')
-        lines.push(`  const json safe_targets = json::parse(R"JSON(${JSON.stringify(safeTargets, null, 2)})JSON");`)
-        lines.push('  for (auto it = safe_targets.begin(); it != safe_targets.end(); ++it) {')
-        lines.push('    const std::string device_id = it.key();')
-        lines.push('    const json params = it.value();')
-        lines.push('    if (!params.is_object() || params.empty()) continue;')
-        lines.push('    device_action(device_id, json{ {"set", params} });')
-        lines.push('  }')
-        lines.push('}')
-        lines.push('')
         lines.push('int main() {')
+        lines.push('  stonegate::Client client("ws://localhost:8080/status");')
         lines.push('  std::unordered_set<std::string> active_recording_ids;')
+        lines.push(`  const json safe_targets = json::parse(R"JSON(${JSON.stringify(safeTargets, null, 2)})JSON");`)
         lines.push('  try {')
         lines.push(...renderStepsCpp(m.steps, 4, 'active_recording_ids'))
         lines.push('  } catch (const std::exception& e) {')
         lines.push('    std::cerr << "Macro error: " << e.what() << std::endl;')
         lines.push('  }')
-        lines.push('  try { apply_safe_state(active_recording_ids); } catch (...) {}')
+        lines.push('  try { stonegate::apply_safe_state(client, active_recording_ids, safe_targets); } catch (...) {}')
         lines.push('  return 0;')
         lines.push('}')
         return lines.join('\n')
@@ -1553,9 +1416,8 @@ export default function MacroEditor() {
         return lines
       }
       if (step.kind === 'deviceAction') {
-        lines.push(`${pad(indent)}import json`) // used only for embedding JSON safely
         lines.push(`${pad(indent)}action = json.loads(r"""${jsonText0(step.action ?? {}, true)}""")`)
-        lines.push(`${pad(indent)}await rpc("device.action", {"device_id": "${esc(step.device_id || '')}", "action": action}, timeout_s=20.0)`) 
+        lines.push(`${pad(indent)}await sg.device_action("${esc(step.device_id || '')}", action)`) 
         return lines
       }
       if (step.kind === 'sleep') {
@@ -1563,58 +1425,36 @@ export default function MacroEditor() {
         return lines
       }
       if (step.kind === 'waitForStable') {
-        lines.push(`${pad(indent)}# Requires: asyncio + rpc("devices.poll", {})`) 
-        lines.push(`${pad(indent)}deadline = asyncio.get_running_loop().time() + ${Math.max(0, step.timeout_ms) / 1000}`)
-        lines.push(`${pad(indent)}ok = 0`)
-        lines.push(`${pad(indent)}samples = []  # (t, value)`)
-        lines.push(`${pad(indent)}while asyncio.get_running_loop().time() < deadline:`)
-        lines.push(`${pad(indent + 2)}r = await rpc("devices.poll", {})`)
-        lines.push(`${pad(indent + 2)}# TODO: extract numeric value for ${esc(step.device_id)}.${esc(step.metric)} from r['updates']`) 
-        lines.push(`${pad(indent + 2)}val = None  # set to float`) 
-        lines.push(`${pad(indent + 2)}now = asyncio.get_running_loop().time()`) 
-        lines.push(`${pad(indent + 2)}if val is not None:`)
-        lines.push(`${pad(indent + 4)}samples.append((now, float(val)))`)
-        lines.push(`${pad(indent + 2)}# keep only window`) 
-        lines.push(`${pad(indent + 2)}window_s = ${Math.max(0.2, step.window_ms / 1000)}`)
-        lines.push(`${pad(indent + 2)}while samples and (now - samples[0][0]) > window_s:`)
-        lines.push(`${pad(indent + 4)}samples.pop(0)`) 
-        lines.push(`${pad(indent + 2)}vals = [v for _, v in samples]`) 
-        lines.push(`${pad(indent + 2)}if len(vals) >= 2 and (max(vals) - min(vals)) <= ${step.tolerance}:`)
-        lines.push(`${pad(indent + 4)}ok += 1`) 
-        lines.push(`${pad(indent + 2)}else:`)
-        lines.push(`${pad(indent + 4)}ok = 0`) 
-        lines.push(`${pad(indent + 2)}if ok >= ${Math.max(1, step.consecutive)}:`)
-        lines.push(`${pad(indent + 4)}break`) 
-        lines.push(`${pad(indent + 2)}await asyncio.sleep(min(0.5, window_s))`) 
+        lines.push(
+          `${pad(indent)}await sg.wait_for_stable(` +
+            `device_id="${esc(step.device_id)}", metric="${esc(step.metric)}", ` +
+            `tolerance=${step.tolerance}, window_s=${Math.max(0.2, step.window_ms / 1000)}, consecutive=${Math.max(1, step.consecutive)}, timeout_s=${Math.max(0, step.timeout_ms) / 1000}` +
+            `)`
+        )
         return lines
       }
       if (step.kind === 'record') {
-        lines.push(`${pad(indent)}import json`) 
         lines.push(`${pad(indent)}params = json.loads(r"""${jsonText0(step.params ?? {}, true)}""")`)
-        lines.push(`${pad(indent)}resp = await rpc("record.start", params, timeout_s=20.0)`)
-        lines.push(`${pad(indent)}recording_id = str(resp.get("recording_id", ""))`)
+        lines.push(`${pad(indent)}recording_id = await sg.record_start(params)`)
         lines.push(`${pad(indent)}try:`)
         for (const inner of step.steps) lines.push(...renderPythonStep(inner, indent + 2))
         lines.push(`${pad(indent)}finally:`)
-        lines.push(`${pad(indent + 2)}if recording_id:`)
-        lines.push(`${pad(indent + 4)}await rpc("record.stop", {"recording_id": recording_id}, timeout_s=20.0)`)
+        lines.push(`${pad(indent + 2)}await sg.record_stop(recording_id)`)
         return lines
       }
       if (step.kind === 'while') {
         lines.push(`${pad(indent)}# Condition: ${esc(step.condition.device_id)}.${esc(step.condition.metric)} ${step.condition.op} ${step.condition.value}`)
         lines.push(`${pad(indent)}for _i in range(${Math.max(1, step.max_iterations)}):`)
-        lines.push(`${pad(indent + 2)}# TODO: read latest value (e.g., via devices.poll)`) 
-        lines.push(`${pad(indent + 2)}latest = None  # float`) 
-        lines.push(`${pad(indent + 2)}if not eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value}):`)
+        lines.push(`${pad(indent + 2)}latest = await sg.get_latest_number("${esc(step.condition.device_id)}", "${esc(step.condition.metric)}")`)
+        lines.push(`${pad(indent + 2)}if not sg.eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value}):`)
         lines.push(`${pad(indent + 4)}break`)
         for (const inner of step.steps) lines.push(...renderPythonStep(inner, indent + 2))
         return lines
       }
       if (step.kind === 'ifElse') {
         lines.push(`${pad(indent)}# Condition: ${esc(step.condition.device_id)}.${esc(step.condition.metric)} ${step.condition.op} ${step.condition.value}`)
-        lines.push(`${pad(indent)}# TODO: read latest value (e.g., via devices.poll)`) 
-        lines.push(`${pad(indent)}latest = None  # float`) 
-        lines.push(`${pad(indent)}if eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value}):`)
+        lines.push(`${pad(indent)}latest = await sg.get_latest_number("${esc(step.condition.device_id)}", "${esc(step.condition.metric)}")`)
+        lines.push(`${pad(indent)}if sg.eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value}):`)
         for (const inner of step.thenSteps) lines.push(...renderPythonStep(inner, indent + 2))
         lines.push(`${pad(indent)}else:`)
         for (const inner of step.elseSteps) lines.push(...renderPythonStep(inner, indent + 2))
@@ -1631,9 +1471,8 @@ export default function MacroEditor() {
         return lines
       }
       if (step.kind === 'deviceAction') {
-        lines.push(`${pad(indent)}// rpc_once("device.action", {"device_id": "${esc(step.device_id || '')}", "action": <json>})`)
-        lines.push(`${pad(indent)}auto action = nlohmann::json::parse(R"JSON(${JSON.stringify(step.action ?? {})})JSON");`)
-        lines.push(`${pad(indent)}rpc_once("localhost", 8080, "/status", "device.action", { {"device_id", "${esc(step.device_id || '')}"}, {"action", action} }, 20000);`)
+        lines.push(`${pad(indent)}auto action = stonegate::json::parse(R"JSON(${JSON.stringify(step.action ?? {})})JSON");`)
+        lines.push(`${pad(indent)}client.device_action("${esc(step.device_id || '')}", action);`)
         return lines
       }
       if (step.kind === 'sleep') {
@@ -1641,37 +1480,39 @@ export default function MacroEditor() {
         return lines
       }
       if (step.kind === 'record') {
-        lines.push(`${pad(indent)}auto params = nlohmann::json::parse(R"JSON(${JSON.stringify(step.params ?? {})})JSON");`)
-        lines.push(`${pad(indent)}auto resp = rpc_once("localhost", 8080, "/status", "record.start", params, 20000);`)
-        lines.push(`${pad(indent)}std::string recording_id = resp.value("recording_id", std::string{});`)
+        lines.push(`${pad(indent)}auto params = stonegate::json::parse(R"JSON(${JSON.stringify(step.params ?? {})})JSON");`)
+        lines.push(`${pad(indent)}std::string recording_id = client.record_start(params);`)
         lines.push(`${pad(indent)}try {`)
         for (const inner of step.steps) lines.push(...renderCppStep(inner, indent + 2))
         lines.push(`${pad(indent)}} catch (...) {`)
-        lines.push(`${pad(indent + 2)}if (!recording_id.empty()) rpc_once("localhost", 8080, "/status", "record.stop", { {"recording_id", recording_id} }, 20000);`)
+        lines.push(`${pad(indent + 2)}client.record_stop(recording_id);`)
         lines.push(`${pad(indent + 2)}throw;`)
         lines.push(`${pad(indent)}}`)
-        lines.push(`${pad(indent)}if (!recording_id.empty()) rpc_once("localhost", 8080, "/status", "record.stop", { {"recording_id", recording_id} }, 20000);`)
+        lines.push(`${pad(indent)}client.record_stop(recording_id);`)
         return lines
       }
       if (step.kind === 'waitForStable') {
-        lines.push(`${pad(indent)}// TODO: implement polling via rpc_once(..., "devices.poll", ...) and apply tolerance/window logic`) 
+        lines.push(
+          `${pad(indent)}client.wait_for_stable(` +
+            `"${esc(step.device_id)}", "${esc(step.metric)}", ` +
+            `${step.tolerance}, ${Math.max(0.2, step.window_ms / 1000)}, ${Math.max(1, step.consecutive)}, ${Math.max(0, step.timeout_ms) / 1000}` +
+            `);`
+        )
         return lines
       }
       if (step.kind === 'while') {
         lines.push(`${pad(indent)}// Condition: ${esc(step.condition.device_id)}.${esc(step.condition.metric)} ${step.condition.op} ${step.condition.value}`)
         lines.push(`${pad(indent)}for (int i = 0; i < ${Math.max(1, step.max_iterations)}; ++i) {`)
-        lines.push(`${pad(indent + 2)}// TODO: read latest value (e.g., via devices.poll)`) 
-        lines.push(`${pad(indent + 2)}double latest = std::numeric_limits<double>::quiet_NaN();`)
-        lines.push(`${pad(indent + 2)}if (!eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value})) break;`)
+        lines.push(`${pad(indent + 2)}double latest = client.get_latest_number("${esc(step.condition.device_id)}", "${esc(step.condition.metric)}");`)
+        lines.push(`${pad(indent + 2)}if (!stonegate::Client::eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value})) break;`)
         for (const inner of step.steps) lines.push(...renderCppStep(inner, indent + 2))
         lines.push(`${pad(indent)}}`)
         return lines
       }
       if (step.kind === 'ifElse') {
         lines.push(`${pad(indent)}// Condition: ${esc(step.condition.device_id)}.${esc(step.condition.metric)} ${step.condition.op} ${step.condition.value}`)
-        lines.push(`${pad(indent)}// TODO: read latest value (e.g., via devices.poll)`) 
-        lines.push(`${pad(indent)}double latest = std::numeric_limits<double>::quiet_NaN();`)
-        lines.push(`${pad(indent)}if (eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value})) {`)
+        lines.push(`${pad(indent)}double latest = client.get_latest_number("${esc(step.condition.device_id)}", "${esc(step.condition.metric)}");`)
+        lines.push(`${pad(indent)}if (stonegate::Client::eval_condition(latest, "${esc(step.condition.op)}", ${step.condition.value})) {`)
         for (const inner of step.thenSteps) lines.push(...renderCppStep(inner, indent + 2))
         lines.push(`${pad(indent)}} else {`)
         for (const inner of step.elseSteps) lines.push(...renderCppStep(inner, indent + 2))
@@ -1682,8 +1523,28 @@ export default function MacroEditor() {
     }
 
     if (macroRenderAs === 'json' || macroRenderAs === 'ui') return JSON.stringify(s, null, 2)
-    if (macroRenderAs === 'python') return renderPythonStep(s).join('\n')
-    if (macroRenderAs === 'cpp') return renderCppStep(s).join('\n')
+    if (macroRenderAs === 'python') {
+      return (
+        ['import asyncio', 'import json', 'import stonegate_api as sg', '', "sg.WS_URL = 'ws://localhost:8080/status'", '', '# In an async context:', '']
+          .concat(renderPythonStep(s))
+          .join('\n')
+      )
+    }
+    if (macroRenderAs === 'cpp') {
+      return (
+        [
+          '#include "stonegate_api.hpp"',
+          '#include <chrono>',
+          '#include <string>',
+          '#include <thread>',
+          '',
+          'stonegate::Client client("ws://localhost:8080/status");',
+          '',
+        ]
+          .concat(renderCppStep(s))
+          .join('\n')
+      )
+    }
     if (macroRenderAs === 'sql') {
       return (
         `-- Step-only SQL plan\n` +
@@ -1916,11 +1777,7 @@ export default function MacroEditor() {
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={revalidate} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Revalidate</button>
-          <button onClick={exportSelectedMacro} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Export macro</button>
-          <button onClick={exportFullPython} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Export Python</button>
-          <button onClick={exportFullCpp} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Export C++</button>
-          <button onClick={exportNotebook} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Export notebook</button>
-          <button onClick={exportMacros} disabled={!macros.length} style={{ padding: '0.3em 0.7em' }}>Export all</button>
+          <button onClick={openExportDialog} disabled={!selectedMacro && !macros.length} style={{ padding: '0.3em 0.7em' }}>Export…</button>
           <button onClick={() => importFileInputRef.current?.click()} style={{ padding: '0.3em 0.7em' }}>Import</button>
           <button onClick={loadBundled} style={{ padding: '0.3em 0.7em' }}>Load bundled</button>
           <input
@@ -2178,6 +2035,98 @@ export default function MacroEditor() {
       </div>
 
       <ContextMenu state={menu} onClose={() => setMenu(null)} />
+
+      {showExportDialog && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 1100,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 12,
+          }}
+          onMouseDown={() => setShowExportDialog(false)}
+        >
+          <div
+            style={{
+              width: 'min(640px, 92vw)',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              background: '#071827',
+              color: '#e6eef8',
+              borderRadius: 10,
+              padding: 12,
+              border: '1px solid rgba(255,255,255,0.18)',
+            }}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <h3 style={{ margin: 0 }}>Export</h3>
+              <button onClick={() => setShowExportDialog(false)}>Cancel</button>
+            </div>
+
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>
+              {selectedMacro ? `Macro: ${selectedMacro.name}` : 'No macro selected.'}
+            </div>
+
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedMacro && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="radio" name="export" checked={exportChoice === 'selected-json'} onChange={() => setExportChoice('selected-json')} />
+                  <span>Selected macro (JSON)</span>
+                </label>
+              )}
+              {macros.length > 0 && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="radio" name="export" checked={exportChoice === 'all-json'} onChange={() => setExportChoice('all-json')} />
+                  <span>All macros (JSON)</span>
+                </label>
+              )}
+              {selectedMacro && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="radio" name="export" checked={exportChoice === 'python'} onChange={() => setExportChoice('python')} />
+                  <span>Python (.py)</span>
+                </label>
+              )}
+              {selectedMacro && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="radio" name="export" checked={exportChoice === 'cpp'} onChange={() => setExportChoice('cpp')} />
+                  <span>C++ (.cpp)</span>
+                </label>
+              )}
+              {selectedMacro && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="radio" name="export" checked={exportChoice === 'notebook'} onChange={() => setExportChoice('notebook')} />
+                  <span>Jupyter notebook (.ipynb)</span>
+                </label>
+              )}
+            </div>
+
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowExportDialog(false)}>Cancel</button>
+              <button
+                onClick={() => {
+                  if (exportChoice === 'all-json') exportMacros()
+                  else if (exportChoice === 'selected-json') exportSelectedMacro()
+                  else if (exportChoice === 'python') exportFullPython()
+                  else if (exportChoice === 'cpp') exportFullCpp()
+                  else if (exportChoice === 'notebook') exportNotebook()
+                  setShowExportDialog(false)
+                }}
+                disabled={
+                  (exportChoice === 'all-json' && macros.length === 0) ||
+                  (exportChoice !== 'all-json' && !selectedMacro)
+                }
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSafeStateDialog && (
         <div

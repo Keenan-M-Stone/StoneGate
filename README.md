@@ -369,6 +369,11 @@ pnpm dev       # or npm run dev
 
 Navigate to `http://localhost:3000` — the frontend will connect to `ws://localhost:9001` by default.
 
+Notes:
+- Vite dev server defaults to `http://localhost:5173`.
+- The frontend WebSocket default is `ws://localhost:8080/status` (matches backend `--sim`).
+  If you run the backend in hardware/default mode (port 9001), set `VITE_BACKEND_WS_URL='ws://localhost:9001/status'` before starting the frontend.
+
 ---
 
 ## Adding New Devices
@@ -382,6 +387,10 @@ To add a new device (real or simulated):
     - For simulation, add your type and properties to `shared/protocol/ComponentSchema.json`.
     - For hardware, implement a driver class and call it from your device.
 
+  **Action shape (UI + scripts):**
+  - The UI and generated scripts use a generic action payload: `{ "set": { "metric": value, ... } }`.
+  - Backend-side, map those generic `set` keys to your device's `perform_action()` keys, or accept `{set:{...}}` directly.
+
 2. **Simulator:**
     - Add your device type and properties to `ComponentSchema.json`.
     - The simulator will auto-load and generate measurements for all properties.
@@ -390,6 +399,28 @@ To add a new device (real or simulated):
 3. **Frontend:**
     - Update UI components if you want custom display/controls for your device type.
     - The default schematic and device panels will show all properties and allow actions defined in the schema.
+
+## Exposing New Operations to Python / C++
+
+StoneGate exposes control operations via JSON-RPC over WebSocket.
+
+1. **Backend (add an RPC method)**
+  - Implement the RPC handler in the backend WebSocket RPC router (see `backend/src/WebSocketServer.cpp`).
+  - Choose a stable method name (example: `"qec.decode"`, `"devices.list"`).
+  - Return JSON results (and structured errors) consistently.
+
+2. **Python (add a helper wrapper)**
+  - Prefer adding a small wrapper in `stonegate_api.py` (transport/ops) or `stonegate_qec.py` (QEC-specific):
+    - Use `await sg.rpc("your.method", params)` for raw calls.
+    - Add a typed helper like `async def your_method(...): ...` for ergonomics.
+
+3. **C++ (add a helper wrapper)**
+  - Prefer adding a method on `stonegate::Client` in `stonegate_api.hpp`, or call `client.rpc("your.method", params)` directly.
+
+4. **Device actions (no new RPC needed)**
+  - If it is a per-device control, prefer using the existing `device.action` RPC and send `{ "set": {...} }`.
+  - Python: `await sg.device_action("device_id", {"set": {...}})`
+  - C++: `client.device_action("device_id", json{{"set", json{{...}}}})`
 
 4. **Testing:**
     - Add a test in `test_simulator.cpp` to verify your device loads and produces expected output.

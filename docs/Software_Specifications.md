@@ -191,7 +191,7 @@ Dialog titles, primary action, cancel action, and expected lifecycle are listed.
      - Primary location:  
        The application header (top bar) displays connection status and backend endpoint.
        - The header contains `Backend status: Connected`/`Disconnected` plus a small tooltip showing the WebSocket URL
-         (e.g., `ws://localhost:9001/status`).
+         (e.g., `ws://localhost:8080/status` in simulator mode, `ws://localhost:9001/status` in hardware/default mode).
        - Clicking the status opens the **Connection Panel** which shows:  
          `Endpoint URL`, `Last Connected`, `Messages Sent`, `Messages Received`, and `Reconnect Policy` (toggle auto-reconnect).
 
@@ -205,59 +205,20 @@ Dialog titles, primary action, cancel action, and expected lifecycle are listed.
        - In production:  
          The settings panel exposes an editable endpoint field that persists to localStorage for the current user.
 
-  1) Creating a macro for complex actions (recording, triggers, stabilization criteria)
-     - Macro Editor entry points:
-       - Toolbar macro icon (gear + play), context menu on a node:  
-         `Create Macro`, or the `Macros` panel in the left rail.
-
-     - Macro creation workflow (UI steps):
-       1. **Create New Macro**  
-          Click `New Macro`, give it a `name`, optional `description`, and choose `recording mode` or `script mode`.
-       2. **Record Mode** (recommended for novice users)  
-          Press `Record`, then interact with the schematic controls
-          (perform actions such as `set LN2 flow`, `trigger pulse`, `apply offset`).
-          The UI records a time-stamped sequence of control messages and device actions.
-       3. **Script Mode** (advanced)  
-          Author a sequence of steps using the visual step editor. Each step contains:
-          - `action`:  
-            A WebSocket control message or client-side helper (e.g., wait, wait_for_measurement).
-          - `target_device(s)`:  
-            Device IDs or sets (by label or query).
-          - `parameters`:  
-            Action parameters (e.g., `flow_rate_Lmin: 2.5`).
-          - `timeout`:  
-            Maximum time to allow the action to complete.
-          - `on_error`:  
-            `abort|continue|retry` policy.
-       4. **Add a Trigger / Stabilization Condition**  
-          For steps that require observing a stable measurement, add a `stability` block:
-          - `monitored_devices`:  
-             List of device ids (or named device sets)
-          - `metrics`:  
-             List of measurement keys (e.g., `temperature_K`, `counts`)
-          - `tolerance`:  
-             Value and mode (`absolute` or `percent`)
-          - `window_ms`:  
-            The moving window duration over which stability is evaluated
-          - `consecutive_periods`:  
-            How many successive windows must satisfy the condition
-          - semantics:  
-            The macro engine computes the metric over the moving window and considers it `stable`
-            if the metric's standard deviation <= `tolerance` (or the relative change <= percent tolerance)
-            for the configured `consecutive_periods`.
-       5. **Preview & Validate**  
-          Run a dry-run validation (static checks) that ensures device IDs exist, actions map to known commands,
-          and stability checks reference valid measurement keys.
-       6. **Save / Schedule**  
-          Save the macro into `macros.json` (user-level) and optionally schedule it to run immediately or at a later time.
-
-     - Execution semantics:
-       - The macro runner sends control messages in order. When a step contains a stability condition it will poll
-         the measurement stream (client-side cache) and evaluate the stability predicate. If the predicate is satisfied,
-         the macro proceeds; otherwise it waits up to the `timeout` and then follows the `on_error` policy.
-       - Macros are executed client-side (fast response) but can authorize long-running sequences
-         by delegating heavy tasks to the backend via a `macro-run` WebSocket control message which
-         the backend can accept and orchestrate.
+  1) Creating a macro (Macro Wizard)
+     - Macros are authored in a step-based Macro Wizard and persisted locally in the browser.
+     - The wizard supports nested block steps:
+       - `record` (contains child steps)
+       - `while` (contains child steps)
+       - `if/else` (contains THEN and ELSE child step lists)
+     - Each step exposes step-scoped **Preview** and **Errors** (for that step only).
+     - Full runnable scripts are produced only via explicit export:
+       - Python uses `stonegate_api.py` (and `stonegate_qec.py` for QEC helpers)
+       - C++ uses `stonegate_api.hpp`
+       - Notebook import/export stores macros in notebook metadata under `metadata.stonegate.macros`
+     - Execution semantics (client-side runner):
+       - Supports run/pause/resume/skip/cancel.
+       - On completion/cancel/error, best-effort “safe state” targets may be applied to devices.
 
      - Example macro (pseudocode):
        - Name: `Tune LN2 until Detector Stabilizes`

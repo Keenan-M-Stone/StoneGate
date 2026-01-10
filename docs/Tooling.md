@@ -153,6 +153,8 @@ The backend will also send non-RPC messages like `descriptor` (on connect) and `
 - `record.stop` params: `{ recording_id: string }`
 - `qec.decode` params: QECRequest-ish object; returns a deterministic, toy decode result (majority vote)
 
+For Python notebooks/scripts, prefer the shared helpers in `stonegate_api.py` (and `stonegate_qec.py` for QEC utilities). For C++, prefer `stonegate_api.hpp`.
+
 ### Python client
 
 ```bash
@@ -163,7 +165,7 @@ pip install -e .
 
 stonegate-toolbox --ws ws://localhost:8080/status devices.list
 stonegate-toolbox --ws ws://localhost:8080/status devices.poll
-stonegate-toolbox --ws ws://localhost:8080/status device.action sim_ln2 '{"set_flow_rate": 2.5}'
+stonegate-toolbox --ws ws://localhost:8080/status device.action sim_ln2 '{"set":{"flow_rate_Lmin":2.5}}'
 
 # Start a recording (JSON array of streams)
 stonegate-toolbox --ws ws://localhost:8080/status record.start \
@@ -192,5 +194,5 @@ Run:
 
 ```bash
 ./tools/build/toolbox_ws_client ws://localhost:8080/status devices.list
-./tools/build/toolbox_ws_client ws://localhost:8080/status device.action '{"device_id":"sim_ln2","action":{"set_flow_rate":2.5}}'
+./tools/build/toolbox_ws_client ws://localhost:8080/status device.action '{"device_id":"sim_ln2","action":{"set":{"flow_rate_Lmin":2.5}}}'
 ```

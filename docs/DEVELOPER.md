@@ -7,7 +7,9 @@ Developer notes can also be found in the main `README.md` doc for the repository
 
 ## Wiring the UI to the backend
 
-- WebSocket endpoint (frontend): `VITE_BACKEND_WS_URL` (default: `ws://localhost:9001/status`).  
+- WebSocket endpoint (frontend): `VITE_BACKEND_WS_URL` (default: `ws://localhost:8080/status`).
+  - Simulator mode (backend: `./StoneGate --sim`): `ws://localhost:8080/status`.
+  - Hardware/default mode (backend: `./StoneGate`): `ws://localhost:9001/status`.
   The frontend `Backend` client connects to this URL and expects two main message shapes:
 
   - Batch measurement update:
@@ -47,7 +49,11 @@ Developer notes can also be found in the main `README.md` doc for the repository
 - `ComponentDialog` displays measurements from `useDeviceStore` state. 
    Use `useDeviceStore.getState().upsertDevice(...)` to apply updates programmatically.
 - A `MacroEditor` can persist macros to `localStorage` and optionally submit a `macro_run` control message to 
-  backend to delegate execution.
+  backend to delegate execution.  
+  Current Macro Wizard behavior (implemented in `frontend/src/components/MacroEditor.tsx`):
+  - Step-based macro authoring with nested blocks (`record`, `while`, `if/else`).
+  - Step-scoped Preview/Errors panes; full scripts are produced via explicit export actions.
+  - Notebook import/export via notebook metadata (`metadata.stonegate.macros`).
 
 ## Messages summary (quick)
 
@@ -86,7 +92,10 @@ Developer notes can also be found in the main `README.md` doc for the repository
   cd frontend
   pnpm install    # or `npm install`
   # set backend URL (optional)
-  export VITE_BACKEND_WS_URL='ws://localhost:9001/status'
+  # simulator mode (backend: ./StoneGate --sim)
+  export VITE_BACKEND_WS_URL='ws://localhost:8080/status'
+  # hardware/default mode (backend: ./StoneGate)
+  # export VITE_BACKEND_WS_URL='ws://localhost:9001/status'
   pnpm run dev
   ```
 
