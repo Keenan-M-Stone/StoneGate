@@ -3,6 +3,7 @@ import History from '../../../state/history'
 import Backend from '../../../api/backend'
 import { useDeviceStore } from '../../../state/store'
 import { UiErrors } from '../../../utils/errorCatalog'
+import DeviceActionDialog from '../../DeviceActionDialog'
 
 function calcStats(values: (number|null)[]){
   const nums = values.filter((v): v is number => typeof v === 'number')
@@ -26,6 +27,8 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
   onStageZero?: ()=>void
 }){
   const device = useDeviceStore(s=>s.devices[id])
+  const descriptor = useDeviceStore(s=>s.descriptors[id])
+  const [showSetDialog, setShowSetDialog] = React.useState(false)
   const [tab, setTab] = React.useState<'plot'|'settings'|'stats'|'json'>('plot')
   const metrics = History.metricsFor(id)
   const defaultMetric = metrics[0] ?? Object.keys(device?.measurements ?? {})[0] ?? ''
@@ -85,10 +88,6 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
   const doZero = ()=>{
     if (onStageZero) return onStageZero()
     Backend.send({ type: 'control', cmd: 'action', device_id: id, action: { zero: true } })
-  }
-  const doSet = (params:any)=>{
-    if (onStageSet) return onStageSet(params)
-    Backend.send({ type: 'control', cmd: 'action', device_id: id, action: { set: params } })
   }
 
   // CSV record
@@ -158,7 +157,7 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
               <button onClick={handleBack}>◀ Back</button>
               <button onClick={handleForward}>Forward ▶</button>
               <button onClick={()=>doZero()}>{onStageZero ? 'Stage Zero' : 'Zero'}</button>
-              <button onClick={()=>{ const v=prompt('Set value JSON (e.g. {"flow_rate_Lmin":2.0})'); if (v) { try{ doSet(JSON.parse(v)) }catch(e){alert(UiErrors.invalidJson())} } }}>{onStageSet ? 'Stage Set' : 'Set'}</button>
+              <button onClick={()=>setShowSetDialog(true)}>{onStageSet ? 'Stage Set' : 'Set'}</button>
               <button onClick={()=>{ const s = parseInt(prompt('Record seconds','10')||'0'); if (s>0) doRecord(s) }}>Record CSV</button>
             </div>
           </div>
@@ -198,6 +197,25 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
           </div>
         )}
       </div>
+
+      {showSetDialog && (
+        <DeviceActionDialog
+          title={onStageSet ? 'Stage Set' : 'Set Parameters'}
+          deviceId={id}
+          descriptor={descriptor}
+          onClose={() => setShowSetDialog(false)}
+          onApply={(action) => {
+            try {
+              // For stage integration, pass set-payload only.
+              if (onStageSet && action?.set) onStageSet(action.set)
+              else Backend.send({ type: 'control', cmd: 'action', device_id: id, action })
+              setShowSetDialog(false)
+            } catch (e) {
+              alert(UiErrors.invalidJson())
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

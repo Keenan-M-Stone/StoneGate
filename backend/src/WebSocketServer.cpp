@@ -206,6 +206,46 @@ void WebSocketServer::handle_message(const nlohmann::json& msg, const std::funct
         const auto type = msg.value("type", std::string{});
         const auto cmd = msg.value("cmd", std::string{});
 
+        auto map_set_action = [](const std::string& device_type, const nlohmann::json& action_in) {
+            if (!action_in.is_object()) return action_in;
+            if (!action_in.contains("set") || !action_in["set"].is_object()) return action_in;
+
+            nlohmann::json out = nlohmann::json::object();
+
+            // Preserve non-set keys (e.g. zero/reset)
+            for (auto it = action_in.begin(); it != action_in.end(); ++it) {
+                if (it.key() == "set") continue;
+                out[it.key()] = it.value();
+            }
+
+            const auto& setobj = action_in["set"];
+            for (auto it = setobj.begin(); it != setobj.end(); ++it) {
+                const std::string k = it.key();
+                const auto& v = it.value();
+                if (k.rfind("set_", 0) == 0) { out[k] = v; continue; }
+
+                // Device-specific mappings
+                if (device_type == "laser_controller") {
+                    if (k == "phase_rad") { out["set_phase"] = v; continue; }
+                    if (k == "intensity" || k == "power" || k == "optical_power") { out["set_intensity"] = v; continue; }
+                }
+                if (device_type == "ln2_cooling_controller") {
+                    if (k == "temperature_K" || k == "setpoint_K") { out["set_setpoint"] = v; continue; }
+                    if (k == "flow_rate_Lmin") { out["set_flow_rate"] = v; continue; }
+                }
+
+                // Generic: try set_<key>, and a stripped-unit form.
+                out[std::string("set_") + k] = v;
+                auto pos = k.find_last_of('_');
+                if (pos != std::string::npos && pos > 0) {
+                    const std::string base = k.substr(0, pos);
+                    out[std::string("set_") + base] = v;
+                }
+            }
+
+            return out;
+        };
+
         auto rpc_error = [&](const std::string& id, int code, const std::string& message, const nlohmann::json& details = nlohmann::json::object()) {
             reply({
                 {"type", "rpc_result"},
@@ -247,7 +287,9 @@ void WebSocketServer::handle_message(const nlohmann::json& msg, const std::funct
                 reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", false}, {"error", stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_UNKNOWN_DEVICE)}, {"device_id", device_id} });
                 return;
             }
-            dev->perform_action(msg["action"]);
+            auto action = msg["action"];
+            action = map_set_action(dev->type(), action);
+            dev->perform_action(action);
             reply({ {"type", "control_ack"}, {"cmd", cmd}, {"ok", true}, {"device_id", device_id} });
             return;
         }
@@ -289,7 +331,9 @@ void WebSocketServer::handle_message(const nlohmann::json& msg, const std::funct
                 if (!params.contains("action") || !params["action"].is_object()) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_MISSING_ACTION), { {"detail", stonegate::errors::D2400_MISSING_ACTION} }); return; }
                 auto dev = registry.get_device(device_id);
                 if (!dev) { rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_UNKNOWN_DEVICE), { {"detail", stonegate::errors::D2400_UNKNOWN_DEVICE}, {"device_id", device_id} }); return; }
-                dev->perform_action(params["action"]);
+                auto action = params["action"];
+                action = map_set_action(dev->type(), action);
+                dev->perform_action(action);
                 rpc_ok(id, { {"device_id", device_id}, {"applied", true} });
                 return;
             }
