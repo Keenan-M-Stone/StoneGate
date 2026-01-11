@@ -1,12 +1,12 @@
 # Tooling (Tools README)
 
-The `tools` directory contains small developer utilities and examples for working with the StoneGate project. 
-The primary example here is `qec_client`, a minimal C++ client that demonstrates submitting a QEC job to the development Flask stub (`backend/qec_stub.py`), polling status, and fetching results.
+The `tools` directory contains small developer utilities and examples for working with the StoneGate project.
+
+The primary C++ example here is `toolbox_ws_client`, a minimal WebSocket RPC client that can call backend methods like `devices.list`, `devices.poll`, `device.action`, `qec.decode`, and `qec.benchmark`.
 
 **Prerequisites**
 - `cmake` (3.16+)
 - A C++17 compiler (`g++` or `clang`)
-- `libcurl` development headers (Debian/Ubuntu: `libcurl4-openssl-dev`)
 - `nlohmann::json` header (Debian/Ubuntu: `nlohmann-json3-dev`) — optional but recommended for CMake
 
 **Build (CMake)**
@@ -15,13 +15,7 @@ The primary example here is `qec_client`, a minimal C++ client that demonstrates
 cd tools
 mkdir -p build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Debug
-cmake --build . --target qec_client -- -j$(nproc)
-```
-
-If you don't want to use CMake, you can compile the single-file example directly (ensure `libcurl` headers are on your include path):
-
-```bash
-g++ -std=c++17 -O2 -I../backend/include -o qec_client ../tools/qec_client.cpp -lcurl
+cmake --build . --target toolbox_ws_client -- -j$(nproc)
 ```
 
 **Run the QEC stub (development)**
@@ -43,11 +37,16 @@ Confirm the stub is responding:
 curl -sS http://127.0.0.1:5001/api/parts | jq .
 ```
 
-**Run the example client**
+**Run the WebSocket toolbox client**
 
 ```bash
-# from repo root
-./tools/build/qec_client http://localhost:5001
+# If 8080 is in use, run the simulator on an alternate port.
+cd backend/build
+./StoneGate --sim --port 8082
+
+cd ../../
+./tools/build/toolbox_ws_client ws://localhost:8082/status devices.list
+./tools/build/toolbox_ws_client ws://localhost:8082/status qec.benchmark '{"code":"repetition","p_flip":0.15,"rounds":5,"shots":2000,"seed":123}'
 ```
 
 **Example `systemd` unit (development use only)**
@@ -78,26 +77,9 @@ systemctl --user enable --now qec_stub.service
 journalctl --user -u qec_stub.service -f
 ```
 
-**Supervisord example**
-
-If you prefer `supervisord`, here's a minimal `supervisord.conf` snippet:
-
-```ini
-[program:qec_stub]
-command=/usr/bin/python3 /home/youruser/dev/StoneGate/backend/qec_stub.py
-directory=/home/youruser/dev/StoneGate/backend
-autostart=true
-autorestart=true
-stdout_logfile=/tmp/qec_stub.out
-stderr_logfile=/tmp/qec_stub.err
-```
-
 **Troubleshooting**
-- If `qec_client` fails to link: ensure `libcurl` dev package is installed and visible to the compiler and linker.
-- If the client POSTs but then cannot fetch results, check that the Flask stub is running and that your `qec_client` 
-  is pointed to the correct base URL (e.g., `http://127.0.0.1:5001`).
-- If you see segmentation faults in `qec_client`, rebuild after cleaning: 
-  `rm -rf build && mkdir build && cmake .. && cmake --build .` and ensure libraries are up-to-date.
+- If `toolbox_ws_client` can’t connect, verify the backend is running and you’re using the correct WS URL (e.g. `ws://localhost:8080/status`).
+- If RPC methods return errors, open Diagnostics in the frontend and check `backend.log` for structured details.
 
 ---
 
@@ -210,10 +192,6 @@ The repo includes lightweight SDK helpers (used by Macro Wizard exports and tool
 
 Source-of-truth for the SDK lives under `tools/sdk_sources/`.
 
-For convenience (Macro Wizard exports, copy/paste examples), the repo also keeps repo-root shims:
-- `stonegate_api.py`, `stonegate_qec.py`
-- `stonegate_api.hpp`, `stonegate_qec.hpp`
-
 The generator writes installable/distributable artifacts under `sdk/`:
 
 ```bash
@@ -232,6 +210,10 @@ import stonegate_qec as qec
 ```
 
 For C++ consumers, the generator also writes `sdk/cpp/include/stonegate_api.hpp` and `sdk/cpp/include/stonegate_qec.hpp` with a minimal `CMakeLists.txt`.
+
+Note: if you're running notebooks directly inside this repo *without* installing the SDK, add either of these to `sys.path`:
+- `sdk/python/stonegate_sdk/` (preferred; matches what you would `pip install -e`)
+- `tools/sdk_sources/` (direct source-of-truth modules)
 
 ### Leak check (simulator)
 

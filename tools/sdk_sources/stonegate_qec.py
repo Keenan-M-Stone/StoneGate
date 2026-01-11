@@ -1,6 +1,6 @@
 """StoneGate quantum error correction (QEC) helpers.
 
-This module complements `stonegate_api.py`.
+This module complements `stonegate_api`.
 
 Design goal: treat the simulator backend like real hardware.
 - Measurements should come from devices in the backend simulator (via `devices.poll`).

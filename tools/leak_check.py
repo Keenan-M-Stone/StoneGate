@@ -18,9 +18,34 @@ from __future__ import annotations
 import argparse
 import asyncio
 import time
+from pathlib import Path
 from typing import List, Tuple
 
-import stonegate_api as sg
+
+def _import_stonegate_api():
+    try:
+        import stonegate_api as sg  # type: ignore
+
+        return sg
+    except ImportError:
+        # Allow running from a repo checkout without installing the SDK.
+        import sys
+
+        repo_root = Path(__file__).resolve().parent.parent
+        candidates = [
+            repo_root / "sdk" / "python" / "stonegate_sdk",
+            repo_root / "tools" / "sdk_sources",
+        ]
+        for c in candidates:
+            if c.exists():
+                sys.path.insert(0, str(c))
+                break
+        import stonegate_api as sg  # type: ignore
+
+        return sg
+
+
+sg = _import_stonegate_api()
 
 
 async def _poll_pressure(device_id: str) -> float:

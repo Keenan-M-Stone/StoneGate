@@ -8,10 +8,6 @@ This repo keeps the *source of truth* for the SDK in:
     - tools/sdk_sources/stonegate_api.hpp
     - tools/sdk_sources/stonegate_qec.hpp
 
-Convenience shims are also kept at the repo root for backwards-compatible usage:
-    - stonegate_api.py / stonegate_qec.py
-    - stonegate_api.hpp / stonegate_qec.hpp
-
 Running this script will write a distributable layout under:
   - sdk/python/stonegate_sdk/
   - sdk/cpp/
@@ -133,14 +129,14 @@ sg.WS_URL = "ws://localhost:8080/status"
     # ---- C++
     hpp_text = (
         "// Generated file.\n"
-        "// Do not edit in sdk/. Edit stonegate_api.hpp at repo root instead.\n"
+        "// Do not edit in sdk/. Edit tools/sdk_sources/stonegate_api.hpp instead.\n"
         "// Regenerate with: python3 tools/generate_stonegate_sdk.py\n\n"
         + _read_text(api_hpp)
     )
 
     qec_hpp_text = (
         "// Generated file.\n"
-        "// Do not edit in sdk/. Edit stonegate_qec.hpp at repo root instead.\n"
+        "// Do not edit in sdk/. Edit tools/sdk_sources/stonegate_qec.hpp instead.\n"
         "// Regenerate with: python3 tools/generate_stonegate_sdk.py\n\n"
         + _read_text(qec_hpp)
     )

@@ -22,7 +22,6 @@
  - Node.js 20+ (for backend-sim and frontend)
  - pnpm (or npm/yarn) for frontend
  - `flask` and `jsonschema` python packages for testing QEC interface.
- - libcurl development headers: `libcurl4-openssl-dev` (needed to build `tools/qec_client`)
 
 ## Backend (C++)
 
@@ -54,7 +53,6 @@ nohup ./backend/build/StoneGate --sim > /tmp/StoneGate.log 2>&1 &
 Notes:
 - Use `./StoneGate --help` to see available options (`--sim`, `--port`, etc.).
 - The backend starts a small stdin-based control thread only when stdin is a TTY. When you run the server detached (e.g. `nohup`, `systemd`, or redirecting stdin), the stdin control thread is skipped automatically to avoid the process being stopped by the shell.
-- Additional documentation under `tools/simulators/README.md`.
 
 ### Test simulator (deterministic output)
 
@@ -342,9 +340,9 @@ Below are step-by-step instructions for common developer and operator flows.
     Build (example):
 
     ```bash
-    g++ -std=c++17 -O2 -o qec_client qec_client.cpp -lcurl
+    g++ -std=c++17 -O2 -o qec_submit_example submit_qec.cpp -lcurl
     # or if pkg-config is available:
-    # g++ -std=c++17 -O2 -o qec_client qec_client.cpp $(pkg-config --cflags --libs libcurl)
+    # g++ -std=c++17 -O2 -o qec_submit_example submit_qec.cpp $(pkg-config --cflags --libs libcurl)
     ```
 
     Management endpoints (parts & overrides):
@@ -419,12 +417,12 @@ StoneGate exposes control operations via JSON-RPC over WebSocket.
   - Return JSON results (and structured errors) consistently.
 
 2. **Python (add a helper wrapper)**
-  - Prefer adding a small wrapper in `stonegate_api.py` (transport/ops) or `stonegate_qec.py` (QEC-specific):
+  - Prefer adding a small wrapper in `tools/sdk_sources/stonegate_api.py` (transport/ops) or `tools/sdk_sources/stonegate_qec.py` (QEC-specific), then regenerate the installable SDK via `python3 tools/generate_stonegate_sdk.py`:
     - Use `await sg.rpc("your.method", params)` for raw calls.
     - Add a typed helper like `async def your_method(...): ...` for ergonomics.
 
 3. **C++ (add a helper wrapper)**
-  - Prefer adding a method on `stonegate::Client` in `stonegate_api.hpp`, or call `client.rpc("your.method", params)` directly.
+  - Prefer adding a method on `stonegate::Client` in `tools/sdk_sources/stonegate_api.hpp`, or call `client.rpc("your.method", params)` directly. Then regenerate the SDK headers via `python3 tools/generate_stonegate_sdk.py`.
 
 4. **Device actions (no new RPC needed)**
   - If it is a per-device control, prefer using the existing `device.action` RPC and send `{ "set": {...} }`.

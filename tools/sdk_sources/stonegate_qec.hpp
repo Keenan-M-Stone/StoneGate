@@ -2,7 +2,7 @@
 
 // StoneGate QEC helpers for generated macros/tools.
 //
-// This is the C++ companion to `stonegate_qec.py`.
+// This is the C++ companion to the `stonegate_qec` Python module.
 // It intentionally stays small and builds on `stonegate_api.hpp`.
 //
 // Primary use:

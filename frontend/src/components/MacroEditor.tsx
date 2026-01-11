@@ -1475,7 +1475,7 @@ export default function MacroEditor() {
         lines.push(`# Rendered as PYTHON`)
         lines.push(`# Macro: ${m.name}`)
         lines.push(`# Copy/paste runnable script.`)
-        lines.push(`# Depends on: stonegate_api.py (this repo) + pip install websockets`)
+        lines.push(`# Depends on: StoneGate SDK (python3 -m pip install -e sdk/python/stonegate_sdk)`)
         lines.push('')
         lines.push('import asyncio')
         lines.push('import json')
@@ -1500,8 +1500,9 @@ export default function MacroEditor() {
         const lines: string[] = []
         lines.push('// Rendered as C++')
         lines.push(`// Macro: ${m.name}`)
-        lines.push('// Copy/paste runnable example using the repo helper: stonegate_api.hpp')
-        lines.push('// Dependencies for stonegate_api.hpp: Boost + nlohmann::json')
+        lines.push('// Copy/paste runnable example using the generated SDK header: sdk/cpp/include/stonegate_api.hpp')
+        lines.push('// Compile tip: add -Isdk/cpp/include (or use the CMake project under sdk/cpp/)')
+        lines.push('// Dependencies: Boost + nlohmann::json')
         lines.push('')
         lines.push('#include "stonegate_api.hpp"')
         lines.push('')
@@ -1807,7 +1808,17 @@ export default function MacroEditor() {
     if (macroRenderAs === 'json' || macroRenderAs === 'ui') return JSON.stringify(s, null, 2)
     if (macroRenderAs === 'python') {
       return (
-        ['import asyncio', 'import json', 'import stonegate_api as sg', '', "sg.WS_URL = 'ws://localhost:8080/status'", '', '# In an async context:', '']
+        [
+          '# Requires: StoneGate SDK (python3 -m pip install -e sdk/python/stonegate_sdk)',
+          'import asyncio',
+          'import json',
+          'import stonegate_api as sg',
+          '',
+          "sg.WS_URL = 'ws://localhost:8080/status'",
+          '',
+          '# In an async context:',
+          '',
+        ]
           .concat(renderPythonStep(s))
           .join('\n')
       )
@@ -1815,6 +1826,7 @@ export default function MacroEditor() {
     if (macroRenderAs === 'cpp') {
       return (
         [
+          '// Compile tip: add -Isdk/cpp/include (or use the CMake project under sdk/cpp/)',
           '#include "stonegate_api.hpp"',
           '#include <chrono>',
           '#include <string>',

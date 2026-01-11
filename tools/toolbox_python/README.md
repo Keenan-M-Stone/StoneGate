@@ -24,5 +24,7 @@ stonegate-toolbox --ws ws://localhost:8080/status devices.poll
 # send a device action (example)
 stonegate-toolbox --ws ws://localhost:8080/status device.action sim_ln2 '{"set":{"flow_rate_Lmin":2.5}}'
 
-# For notebooks/scripts, prefer the shared helpers in `stonegate_api.py` (and `stonegate_qec.py` for QEC utilities).
+# For notebooks/scripts, prefer the shared helpers from the generated SDK:
+#   python3 tools/generate_stonegate_sdk.py
+#   python3 -m pip install -e sdk/python/stonegate_sdk
 ```
