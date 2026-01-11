@@ -4,6 +4,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <optional>
 #include <atomic>
 #include <chrono>
 #include <nlohmann/json.hpp>
@@ -37,6 +38,18 @@ public:
     // Get the current simulated environment state (temperature/pressure/etc).
     nlohmann::json get_env_state();
 
+    // Set one or more environment variables at runtime.
+    // Accepted keys: temperature_K, pressure_kPa, ambient_lux, vibration_rms.
+    // Returns true if at least one key was applied.
+    bool set_env_state(const nlohmann::json& env_patch);
+
+    // Apply in-memory per-device override JSON (deep-merged with file overrides).
+    // This is intended for fault injection and interactive demos; it does not write to disk.
+    bool apply_runtime_override(const std::string& device_id, const nlohmann::json& override_patch);
+    bool clear_runtime_overrides();
+    bool clear_runtime_override(const std::string& device_id);
+    nlohmann::json get_runtime_overrides_snapshot();
+
     // Feedback control: automatically adjust LN2 flow to reach target temperature.
     // Returns true if target reached within tolerance and max_steps, false otherwise.
     bool auto_cool_to_temp(const std::string& ln2_id, const std::string& thermo_id, double target_K, double tolerance = 0.5, int max_steps = 30);
@@ -50,6 +63,10 @@ private:
     nlohmann::json partsLib;
     nlohmann::json deviceOverrides;
     std::string overridesPath;
+
+    // In-memory overrides layered on top of deviceOverrides.
+    std::mutex runtimeOverridesMutex;
+    nlohmann::json runtimeOverrides;
 
     struct NodeInfo { nlohmann::json node; nlohmann::json partSpec; };
     std::unordered_map<std::string, NodeInfo> nodes;

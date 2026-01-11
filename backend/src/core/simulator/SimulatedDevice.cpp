@@ -3,6 +3,7 @@
 #include <chrono>
 #include <random>
 #include <algorithm>
+#include <sstream>
 
 SimulatedDevice::SimulatedDevice(
     const std::string& id,
@@ -42,10 +43,12 @@ nlohmann::json SimulatedDevice::descriptor() const {
     nlohmann::json metrics = nlohmann::json::object();
     for (const auto& p : properties) {
         const std::string key = p;
-        if (key == "state_vector" || key == "role") {
+        if (key == "state_vector" || key == "role" || key == "code_type" || key == "spectrum_json" || key == "histogram_json" || key == "notes" || key == "operation") {
             metrics[key] = { {"kind", "string"} };
-        } else if (key == "correction_applied") {
+        } else if (key == "correction_applied" || key == "running" || key == "calibrated" || key == "active" || key == "last_reset_ok") {
             metrics[key] = { {"kind", "boolean"} };
+        } else if (key == "round" || key == "syndrome" || key == "syndrome_bit" || key == "cycle" || key == "distance") {
+            metrics[key] = { {"kind", "integer"} };
         } else {
             metrics[key] = { {"kind", "number"} };
         }
@@ -132,6 +135,63 @@ void SimulatedDevice::init_defaults() {
         int_state["logical_bit"] = 0;
         int_state["round"] = 0;
         string_state["code_type"] = "repetition";
+    }
+
+    if (dev_type == "SyndromeStream") {
+        bool_state["running"] = false;
+        int_state["round"] = 0;
+        int_state["syndrome_bit"] = 0;
+        numeric_state["p_flip"] = 0.01;
+        string_state["code_type"] = "repetition";
+        numeric_state["rate_hz"] = 10.0;
+    }
+
+    if (dev_type == "NoiseSpectrometer") {
+        bool_state["running"] = false;
+        numeric_state["noise_floor"] = 0.01;
+        numeric_state["one_over_f_corner_hz"] = 1.0;
+        numeric_state["t1_est_s"] = 0.5;
+        numeric_state["t2_est_s"] = 0.25;
+        string_state["spectrum_json"] = "{}";
+        numeric_state["band_hz"] = 1000.0;
+        numeric_state["duration_s"] = 1.0;
+    }
+
+    if (dev_type == "ReadoutCalibrator") {
+        bool_state["calibrated"] = false;
+        numeric_state["threshold"] = 0.5;
+        numeric_state["snr_db"] = 10.0;
+        numeric_state["p0_mean"] = 0.2;
+        numeric_state["p1_mean"] = 0.8;
+        string_state["histogram_json"] = "{}";
+        int_state["samples"] = 200;
+        string_state["target_device"] = "det0";
+    }
+
+    if (dev_type == "FaultInjector") {
+        bool_state["active"] = true;
+        string_state["notes"] = "";
+    }
+
+    if (dev_type == "LeakageResetController") {
+        numeric_state["leakage_fraction"] = 0.0;
+        bool_state["last_reset_ok"] = true;
+        numeric_state["reset_success_prob"] = 1.0;
+        numeric_state["last_reset_ts_ms"] = 0.0;
+        string_state["target_device"] = "qec0";
+    }
+
+    if (dev_type == "SurfaceCodeController") {
+        bool_state["active"] = false;
+        int_state["distance"] = 3;
+        int_state["cycle"] = 0;
+        numeric_state["logical_error_rate_est"] = 0.1;
+    }
+
+    if (dev_type == "LatticeSurgeryController") {
+        string_state["operation"] = "merge";
+        numeric_state["success_prob"] = 0.9;
+        numeric_state["last_run_ts_ms"] = 0.0;
     }
 }
 
@@ -249,6 +309,40 @@ nlohmann::json SimulatedDevice::read_measurement() {
         meas["refractive_index"] = { {"value", n}, {"uncertainty", 0.0} };
         meas["p_flip"] = { {"value", pflip}, {"uncertainty", 0.0} };
     }
+
+    // Syndrome stream: if running, advance one step per read and sample a syndrome bit.
+    if (dev_type == "SyndromeStream") {
+        const bool running_now = bool_state.count("running") ? bool_state["running"] : false;
+        if (running_now) {
+            // Use local p_flip if physics doesn't provide it.
+            double pflip = 0.01;
+            if (meas.contains("p_flip") && meas["p_flip"].is_object() && meas["p_flip"].contains("value")) {
+                try { pflip = meas["p_flip"]["value"].get<double>(); } catch (...) {}
+            } else {
+                const double Tk = get_temperature_K_fallback();
+                pflip = compute_p_flip(Tk);
+            }
+            pflip = clamp01(pflip);
+
+            std::uniform_real_distribution<double> u(0.0, 1.0);
+            int bit = 0;
+            if (u(rng) < pflip) bit = 1;
+            int_state["syndrome_bit"] = bit;
+            int_state["round"] = int_state.count("round") ? (int_state["round"] + 1) : 1;
+        }
+    }
+
+    // Ensure JSON-string fields remain compact.
+    if (dev_type == "NoiseSpectrometer") {
+        if (string_state.count("spectrum_json")) {
+            meas["spectrum_json"] = { {"value", string_state["spectrum_json"]}, {"uncertainty", 0.0} };
+        }
+    }
+    if (dev_type == "ReadoutCalibrator") {
+        if (string_state.count("histogram_json")) {
+            meas["histogram_json"] = { {"value", string_state["histogram_json"]}, {"uncertainty", 0.0} };
+        }
+    }
     // If no properties defined, provide a generic value
     if (properties.empty()) {
         meas["value"] = { {"value", sample_normal(rng, 1.0, 0.1)}, {"uncertainty", 0.1} };
@@ -350,6 +444,224 @@ void SimulatedDevice::perform_action(const nlohmann::json& cmd) {
             int_state["syndrome"] = measured;
             int_state["round"] = int_state.count("round") ? (int_state["round"] + 1) : 1;
             bool_state["correction_applied"] = false;
+        }
+    }
+
+    // SyndromeStream control.
+    if (dev_type == "SyndromeStream") {
+        if (cmd.contains("start")) {
+            bool_state["running"] = true;
+        }
+        if (cmd.contains("stop")) {
+            bool_state["running"] = false;
+        }
+        if (cmd.contains("set_code_type") && cmd["set_code_type"].is_string()) {
+            try { string_state["code_type"] = cmd["set_code_type"].get<std::string>(); } catch (...) {}
+        }
+        if (cmd.contains("set_rate_hz") && cmd["set_rate_hz"].is_number()) {
+            try { numeric_state["rate_hz"] = std::max(0.1, cmd["set_rate_hz"].get<double>()); } catch (...) {}
+        }
+    }
+
+    // Noise spectrometer: synthesize plausible parameters tied to simulator noise.
+    if (dev_type == "NoiseSpectrometer") {
+        if (cmd.contains("set_band_hz") && cmd["set_band_hz"].is_number()) {
+            try { numeric_state["band_hz"] = std::max(1.0, cmd["set_band_hz"].get<double>()); } catch (...) {}
+        }
+        if (cmd.contains("set_duration_s") && cmd["set_duration_s"].is_number()) {
+            try { numeric_state["duration_s"] = std::max(0.01, cmd["set_duration_s"].get<double>()); } catch (...) {}
+        }
+        if (cmd.contains("run_scan")) {
+            bool_state["running"] = true;
+            // Derive from environment-driven p_flip if available.
+            const double Tk = get_temperature_K_fallback();
+            double p = compute_p_flip(Tk);
+            if (physics) {
+                try {
+                    auto st = physics->get_cached_step();
+                    if (st.contains(dev_id) && st[dev_id].contains("p_flip")) p = st[dev_id]["p_flip"].get<double>();
+                } catch (...) {}
+            }
+            p = clamp01(p);
+            numeric_state["noise_floor"] = 0.005 + 0.15 * p;
+            numeric_state["one_over_f_corner_hz"] = 0.5 + 30.0 * p;
+            numeric_state["t1_est_s"] = std::max(0.02, 1.0 / (0.5 + 8.0 * p));
+            numeric_state["t2_est_s"] = std::max(0.01, 0.7 * numeric_state["t1_est_s"]);
+
+            // Tiny synthetic spectrum payload (JSON string) for UI viewing.
+            nlohmann::json spec = nlohmann::json::object();
+            spec["band_hz"] = numeric_state["band_hz"];
+            spec["duration_s"] = numeric_state["duration_s"];
+            spec["noise_floor"] = numeric_state["noise_floor"];
+            spec["one_over_f_corner_hz"] = numeric_state["one_over_f_corner_hz"];
+            spec["t1_est_s"] = numeric_state["t1_est_s"];
+            spec["t2_est_s"] = numeric_state["t2_est_s"];
+            string_state["spectrum_json"] = spec.dump();
+
+            bool_state["running"] = false;
+        }
+    }
+
+    // Readout calibration: fit a threshold and record a synthetic histogram.
+    if (dev_type == "ReadoutCalibrator") {
+        if (cmd.contains("set_samples") && cmd["set_samples"].is_number_integer()) {
+            try { int_state["samples"] = std::max(10, cmd["set_samples"].get<int>()); } catch (...) {}
+        }
+        if (cmd.contains("set_target_device") && cmd["set_target_device"].is_string()) {
+            try { string_state["target_device"] = cmd["set_target_device"].get<std::string>(); } catch (...) {}
+        }
+        if (cmd.contains("calibrate")) {
+            // Tie separation to p_flip: noisier environments => worse SNR.
+            const double Tk = get_temperature_K_fallback();
+            double p = compute_p_flip(Tk);
+            if (physics) {
+                try {
+                    auto st = physics->get_cached_step();
+                    if (st.contains(dev_id) && st[dev_id].contains("p_flip")) p = st[dev_id]["p_flip"].get<double>();
+                } catch (...) {}
+            }
+            p = clamp01(p);
+            const double sep = std::max(0.05, 0.6 - 1.2 * p);
+            numeric_state["p0_mean"] = 0.5 - sep / 2.0;
+            numeric_state["p1_mean"] = 0.5 + sep / 2.0;
+            numeric_state["threshold"] = 0.5;
+            numeric_state["snr_db"] = 20.0 * std::log10(std::max(1e-6, sep / (0.02 + 0.2 * p)));
+            // Histogram bins.
+            nlohmann::json h = nlohmann::json::object();
+            h["p0_mean"] = numeric_state["p0_mean"];
+            h["p1_mean"] = numeric_state["p1_mean"];
+            h["samples"] = int_state["samples"];
+            string_state["histogram_json"] = h.dump();
+            bool_state["calibrated"] = true;
+        }
+    }
+
+    // Fault injection: change environment and inject in-memory overrides.
+    if (dev_type == "FaultInjector") {
+        if (cmd.contains("disable")) {
+            bool_state["active"] = false;
+            if (physics) {
+                try { physics->clear_runtime_overrides(); } catch (...) {}
+            }
+        }
+        if (cmd.contains("set_env") && cmd["set_env"].is_object()) {
+            if (physics) {
+                try { physics->set_env_state(cmd["set_env"]); } catch (...) {}
+            }
+        }
+        if (cmd.contains("override_device") && cmd["override_device"].is_object()) {
+            if (physics) {
+                try {
+                    const auto& o = cmd["override_device"];
+                    std::string target = o.value("device_id", std::string{});
+                    nlohmann::json patch = o.value("override", nlohmann::json::object());
+                    if (!target.empty() && patch.is_object()) physics->apply_runtime_override(target, patch);
+                } catch (...) {}
+            }
+        }
+        if (cmd.contains("clear_overrides")) {
+            if (physics) {
+                try { physics->clear_runtime_overrides(); } catch (...) {}
+            }
+        }
+        if (cmd.contains("set_notes") && cmd["set_notes"].is_string()) {
+            try { string_state["notes"] = cmd["set_notes"].get<std::string>(); } catch (...) {}
+        }
+    }
+
+    // Leakage/reset controller: model leakage fraction and reset attempts.
+    if (dev_type == "LeakageResetController") {
+        if (cmd.contains("set_target_device") && cmd["set_target_device"].is_string()) {
+            try { string_state["target_device"] = cmd["set_target_device"].get<std::string>(); } catch (...) {}
+        }
+        if (cmd.contains("set_leakage_fraction") && cmd["set_leakage_fraction"].is_number()) {
+            try { numeric_state["leakage_fraction"] = clamp01(cmd["set_leakage_fraction"].get<double>()); } catch (...) {}
+        }
+        if (cmd.contains("attempt_reset")) {
+            const double Tk = get_temperature_K_fallback();
+            double p = compute_p_flip(Tk);
+            if (physics) {
+                try {
+                    auto st = physics->get_cached_step();
+                    if (st.contains(dev_id) && st[dev_id].contains("p_flip")) p = st[dev_id]["p_flip"].get<double>();
+                } catch (...) {}
+            }
+            p = clamp01(p);
+            const double L = clamp01(numeric_state.count("leakage_fraction") ? numeric_state["leakage_fraction"] : 0.0);
+            double success = 1.0 - (0.25 * L + 0.9 * p);
+            success = std::max(0.0, std::min(1.0, success));
+            numeric_state["reset_success_prob"] = success;
+            std::uniform_real_distribution<double> u(0.0, 1.0);
+            bool ok = u(rng) < success;
+            bool_state["last_reset_ok"] = ok;
+            numeric_state["last_reset_ts_ms"] = (double)std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            // Successful reset reduces leakage.
+            if (ok) numeric_state["leakage_fraction"] = std::max(0.0, L * 0.2);
+        }
+    }
+
+    // Surface code controller: run a toy cycle counter and estimate logical error rate.
+    if (dev_type == "SurfaceCodeController") {
+        if (cmd.contains("configure") && cmd["configure"].is_object()) {
+            const auto& c = cmd["configure"];
+            if (c.contains("distance") && c["distance"].is_number_integer()) {
+                try { int_state["distance"] = std::max(3, c["distance"].get<int>() | 1); } catch (...) {}
+            }
+        }
+        if (cmd.contains("run_cycles")) {
+            int cycles = 10;
+            if (cmd["run_cycles"].is_object()) {
+                try { cycles = std::max(1, cmd["run_cycles"].value("cycles", 10)); } catch (...) {}
+            }
+            bool_state["active"] = true;
+            // Estimate depends on p_flip and distance.
+            const double Tk = get_temperature_K_fallback();
+            double p = compute_p_flip(Tk);
+            if (physics) {
+                try {
+                    auto st = physics->get_cached_step();
+                    if (st.contains(dev_id) && st[dev_id].contains("p_flip")) p = st[dev_id]["p_flip"].get<double>();
+                } catch (...) {}
+            }
+            p = clamp01(p);
+            const int d = int_state.count("distance") ? int_state["distance"] : 3;
+            // Fowler-style heuristic: p_L ~ A*(p/p_th)^{(d+1)/2}
+            const double p_th = 0.01;
+            const double A = 0.1;
+            const double exponent = (double)(d + 1) / 2.0;
+            double pL = A * std::pow(std::max(1e-9, p / p_th), exponent);
+            pL = std::max(0.0, std::min(1.0, pL));
+            numeric_state["logical_error_rate_est"] = pL;
+            int_state["cycle"] = int_state.count("cycle") ? (int_state["cycle"] + cycles) : cycles;
+        }
+        if (cmd.contains("stop")) {
+            bool_state["active"] = false;
+        }
+    }
+
+    // Lattice surgery controller: demo operation with success probability tied to noise.
+    if (dev_type == "LatticeSurgeryController") {
+        if (cmd.contains("set_operation") && cmd["set_operation"].is_string()) {
+            try { string_state["operation"] = cmd["set_operation"].get<std::string>(); } catch (...) {}
+        }
+        if (cmd.contains("run_demo")) {
+            const double Tk = get_temperature_K_fallback();
+            double p = compute_p_flip(Tk);
+            if (physics) {
+                try {
+                    auto st = physics->get_cached_step();
+                    if (st.contains(dev_id) && st[dev_id].contains("p_flip")) p = st[dev_id]["p_flip"].get<double>();
+                } catch (...) {}
+            }
+            p = clamp01(p);
+            // Operation-specific sensitivity.
+            const std::string op = string_state.count("operation") ? string_state["operation"] : "merge";
+            double k = (op == "split") ? 0.7 : (op == "merge") ? 0.9 : 0.8;
+            double success = std::max(0.0, std::min(1.0, k * (1.0 - 2.0 * p)));
+            numeric_state["success_prob"] = success;
+            numeric_state["last_run_ts_ms"] = (double)std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
         }
     }
 

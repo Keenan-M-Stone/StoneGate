@@ -82,5 +82,48 @@
         "properties": ["vibration_rms"],
         "interactive": [],
         "plot": ["vibration_rms"]
+    },
+
+    "SyndromeStream": {
+        "displayName": "Syndrome Stream",
+        "properties": ["running", "round", "syndrome_bit", "p_flip", "code_type"],
+        "interactive": ["start", "stop", "set_code_type", "set_rate_hz"],
+        "plot": ["syndrome_bit", "p_flip", "round"]
+    },
+    "NoiseSpectrometer": {
+        "displayName": "Noise Spectrometer",
+        "properties": ["running", "noise_floor", "one_over_f_corner_hz", "t1_est_s", "t2_est_s", "spectrum_json"],
+        "interactive": ["run_scan", "set_band_hz", "set_duration_s"],
+        "plot": ["noise_floor", "one_over_f_corner_hz", "t1_est_s", "t2_est_s"]
+    },
+    "ReadoutCalibrator": {
+        "displayName": "Readout Calibrator",
+        "properties": ["calibrated", "threshold", "snr_db", "p0_mean", "p1_mean", "histogram_json"],
+        "interactive": ["calibrate", "set_samples", "set_target_device"],
+        "plot": ["threshold", "snr_db"]
+    },
+    "FaultInjector": {
+        "displayName": "Fault Injector",
+        "properties": ["active", "temperature_K", "pressure_kPa", "ambient_lux", "vibration_rms", "notes"],
+        "interactive": ["set_env", "override_device", "clear_overrides", "disable"],
+        "plot": ["temperature_K", "pressure_kPa", "ambient_lux", "vibration_rms"]
+    },
+    "LeakageResetController": {
+        "displayName": "Leakage / Reset Controller",
+        "properties": ["leakage_fraction", "last_reset_ok", "reset_success_prob", "last_reset_ts_ms"],
+        "interactive": ["set_leakage_fraction", "attempt_reset", "set_target_device"],
+        "plot": ["leakage_fraction", "reset_success_prob"]
+    },
+    "SurfaceCodeController": {
+        "displayName": "Surface Code Controller",
+        "properties": ["distance", "cycle", "logical_error_rate_est", "active"],
+        "interactive": ["configure", "run_cycles", "stop"],
+        "plot": ["cycle", "logical_error_rate_est"]
+    },
+    "LatticeSurgeryController": {
+        "displayName": "Lattice Surgery Controller",
+        "properties": ["operation", "success_prob", "last_run_ts_ms"],
+        "interactive": ["run_demo", "set_operation"],
+        "plot": ["success_prob"]
     }
 }

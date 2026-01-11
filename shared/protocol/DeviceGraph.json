@@ -13,7 +13,15 @@
         { "id": "amb0",        "type": "AmbientLightSensor", "x": 560, "y": 480, "label": "Ambient Light" },
         { "id": "vib0",        "type": "VibrationSensor",    "x": 800, "y": 480, "label": "Vibration" },
 
-        { "id": "qec0",        "type": "QECModule",          "x": 800, "y": 300, "label": "QEC Module" }
+        { "id": "qec0",        "type": "QECModule",          "x": 800, "y": 300, "label": "QEC Module" },
+
+        { "id": "syn0",        "type": "SyndromeStream",        "x": 1040, "y": 300, "label": "Syndrome Stream" },
+        { "id": "noise0",      "type": "NoiseSpectrometer",     "x": 1040, "y": 120, "label": "Noise Spectrometer" },
+        { "id": "rocal0",      "type": "ReadoutCalibrator",     "x": 1040, "y": 480, "label": "Readout Cal" },
+        { "id": "fault0",      "type": "FaultInjector",         "x": 1280, "y": 300, "label": "Fault Injector" },
+        { "id": "leak0",       "type": "LeakageResetController", "x": 1280, "y": 480, "label": "Leak/Reset" },
+        { "id": "surf0",       "type": "SurfaceCodeController",  "x": 1280, "y": 120, "label": "Surface Code" },
+        { "id": "surg0",       "type": "LatticeSurgeryController", "x": 1520, "y": 300, "label": "Lattice Surgery" }
     ],
     "edges": [
         { "from": "laser0", "to": "pm0"  },
@@ -27,6 +35,15 @@
         { "from": "press0",      "to": "tc0" },
         { "from": "amb0",        "to": "det0" },
         { "from": "vib0",        "to": "pm0" },
-        { "from": "qec0",        "to": "det0" }
+        { "from": "qec0",        "to": "det0" },
+
+        { "from": "qec0",        "to": "syn0" },
+        { "from": "det0",        "to": "rocal0" },
+        { "from": "qec0",        "to": "noise0" },
+        { "from": "fault0",      "to": "qec0" },
+        { "from": "fault0",      "to": "det0" },
+        { "from": "leak0",       "to": "qec0" },
+        { "from": "surf0",       "to": "syn0" },
+        { "from": "surg0",       "to": "syn0" }
     ]
 }

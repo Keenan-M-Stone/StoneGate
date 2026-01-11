@@ -394,6 +394,77 @@ void WebSocketServer::handle_message(const nlohmann::json& msg, const std::funct
                 return;
             }
 
+            if (method == "qec.benchmark") {
+                // Backend-owned micro-benchmarking harness for demos.
+                // Input loosely follows shared/protocol/QECBenchmarkRequest.json.
+                nlohmann::json req = params;
+                const std::string code = req.value("code", std::string{"repetition"});
+                double p_flip = 0.01;
+                try { if (req.contains("p_flip")) p_flip = req["p_flip"].get<double>(); } catch (...) {}
+                p_flip = std::max(0.0, std::min(1.0, p_flip));
+                int rounds = 3;
+                int shots = 1000;
+                try { rounds = std::max(1, req.value("rounds", 3)); } catch (...) {}
+                try { shots = std::max(1, req.value("shots", 1000)); } catch (...) {}
+                uint64_t seed = 0;
+                try { seed = (uint64_t)std::max(0, req.value("seed", 0)); } catch (...) {}
+
+                double raw_error_rate = p_flip;
+                double decoded_error_rate = p_flip;
+
+                if (code == "repetition") {
+                    // Monte Carlo majority vote over `rounds` measurements.
+                    std::mt19937_64 rng(seed ? seed : (uint64_t)std::chrono::high_resolution_clock::now().time_since_epoch().count());
+                    std::uniform_real_distribution<double> u(0.0, 1.0);
+                    int errs = 0;
+                    for (int s = 0; s < shots; ++s) {
+                        int ones = 0;
+                        for (int r = 0; r < rounds; ++r) {
+                            int bit = 0;
+                            if (u(rng) < p_flip) bit = 1;
+                            ones += bit;
+                        }
+                        int dec = (ones > (rounds / 2)) ? 1 : 0;
+                        if (dec != 0) errs += 1;
+                    }
+                    decoded_error_rate = (double)errs / (double)std::max(1, shots);
+                } else if (code == "surface") {
+                    // Heuristic scaling law (not a full decoder): p_L ~ A*(p/p_th)^{(d+1)/2}.
+                    // For demos, accept `params.distance`.
+                    int d = 3;
+                    try {
+                        if (req.contains("params") && req["params"].is_object()) {
+                            d = std::max(3, req["params"].value("distance", 3));
+                        }
+                    } catch (...) {
+                    }
+                    if ((d % 2) == 0) d += 1;
+                    const double p_th = 0.01;
+                    const double A = 0.1;
+                    const double exponent = (double)(d + 1) / 2.0;
+                    double pL = A * std::pow(std::max(1e-12, p_flip / p_th), exponent);
+                    decoded_error_rate = std::max(0.0, std::min(1.0, pL));
+                } else {
+                    // Custom: report raw as decoded by default.
+                    decoded_error_rate = raw_error_rate;
+                }
+
+                nlohmann::json result = {
+                    {"job_id", req.value("job_id", id)},
+                    {"status", "done"},
+                    {"statistics", {
+                        {"shots", shots},
+                        {"rounds", rounds},
+                        {"p_flip", p_flip},
+                        {"raw_error_rate", raw_error_rate},
+                        {"decoded_error_rate", decoded_error_rate},
+                        {"code", code}
+                    }}
+                };
+                rpc_ok(id, result);
+                return;
+            }
+
             rpc_error(id, stonegate::errors::E2400_CONTROL_REJECTED, stonegate::errors::format_E2400_control_rejected(stonegate::errors::D2400_RPC_UNKNOWN_METHOD), { {"detail", stonegate::errors::D2400_RPC_UNKNOWN_METHOD}, {"method", method} });
             return;
         }

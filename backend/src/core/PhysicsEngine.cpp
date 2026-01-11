@@ -10,9 +10,25 @@
 using nlohmann::json;
 using namespace std;
 
+static void deep_merge_json(json& dest, const json& src) {
+    if (!src.is_object() || !dest.is_object()) {
+        dest = src;
+        return;
+    }
+    for (auto it = src.begin(); it != src.end(); ++it) {
+        const std::string key = it.key();
+        if (dest.contains(key) && dest[key].is_object() && it.value().is_object()) {
+            deep_merge_json(dest[key], it.value());
+        } else {
+            dest[key] = it.value();
+        }
+    }
+}
+
 PhysicsEngine::PhysicsEngine() {
     // initialize to a well-defined min time to avoid uninitialized comparisons
     overridesLastWrite = std::filesystem::file_time_type::min();
+    runtimeOverrides = json::object();
 }
 
 PhysicsEngine::~PhysicsEngine() {
@@ -99,27 +115,22 @@ json PhysicsEngine::compute_step() {
     const double n_air = 1.0 + K * (P_kPa / std::max(1.0, T_K));
 
     json result = json::object();
-    // helper: deep merge src -> dest
-    std::function<void(json&, const json&)> deep_merge = [&](json& dest, const json& src) {
-        if (!src.is_object() || !dest.is_object()) {
-            dest = src;
-            return;
-        }
-        for (auto it = src.begin(); it != src.end(); ++it) {
-            const std::string key = it.key();
-            if (dest.contains(key) && dest[key].is_object() && it.value().is_object()) {
-                deep_merge(dest[key], it.value());
-            } else {
-                dest[key] = it.value();
-            }
-        }
-    };
+    // Snapshot runtime overrides once per compute to keep a consistent view.
+    json runtime = json::object();
+    {
+        std::lock_guard<std::mutex> lk(runtimeOverridesMutex);
+        runtime = runtimeOverrides;
+    }
 
     for (const auto& [id, info] : nodes) {
         // start from partSpec then deep-merge deviceOverrides for this id (if any)
         json spec = info.partSpec;
         if (deviceOverrides.contains(id)) {
-            deep_merge(spec, deviceOverrides[id]);
+            deep_merge_json(spec, deviceOverrides[id]);
+        }
+        // runtime overrides are layered on top
+        if (runtime.contains(id)) {
+            deep_merge_json(spec, runtime[id]);
         }
 
         double noise_coeff = 0.01;
@@ -194,7 +205,11 @@ json PhysicsEngine::compute_step() {
             node_out["temperature"] = T_K; // schema uses "temperature" for detector
         }
 
-        if (type == "QECModule") {
+        auto is_qec_related = [&](const std::string& t) {
+            return t == "QECModule" || t == "SyndromeStream" || t == "SurfaceCodeController" || t == "LatticeSurgeryController" ||
+                   t == "LeakageResetController" || t == "NoiseSpectrometer" || t == "ReadoutCalibrator" || t == "FaultInjector";
+        };
+        if (is_qec_related(type)) {
             // Backend-owned noise model for QEC: depends on temperature, pressure, and vibration.
             const double base_p = 0.01;
             const double aT = 0.0035; // per K above 77
@@ -210,6 +225,75 @@ json PhysicsEngine::compute_step() {
     }
 
     return result;
+}
+
+bool PhysicsEngine::set_env_state(const json& env_patch) {
+    if (!env_patch.is_object()) return false;
+    bool any = false;
+    {
+        std::lock_guard<std::mutex> lk(envMutex);
+        if (env_patch.contains("temperature_K") && env_patch["temperature_K"].is_number()) {
+            env_temperature_K = clamp(env_patch["temperature_K"].get<double>(), 50.0, 350.0);
+            any = true;
+        }
+        if (env_patch.contains("pressure_kPa") && env_patch["pressure_kPa"].is_number()) {
+            env_pressure_kPa = clamp(env_patch["pressure_kPa"].get<double>(), 10.0, 200.0);
+            any = true;
+        }
+        if (env_patch.contains("ambient_lux") && env_patch["ambient_lux"].is_number()) {
+            env_ambient_lux = clamp(env_patch["ambient_lux"].get<double>(), 0.0, 10000.0);
+            any = true;
+        }
+        if (env_patch.contains("vibration_rms") && env_patch["vibration_rms"].is_number()) {
+            env_vibration_rms = clamp(env_patch["vibration_rms"].get<double>(), 0.0, 0.05);
+            any = true;
+        }
+    }
+    if (any) compute_and_cache();
+    return any;
+}
+
+bool PhysicsEngine::apply_runtime_override(const std::string& device_id, const json& override_patch) {
+    if (device_id.empty()) return false;
+    if (!override_patch.is_object()) return false;
+    {
+        std::lock_guard<std::mutex> lk(runtimeOverridesMutex);
+        if (!runtimeOverrides.is_object()) runtimeOverrides = json::object();
+        if (!runtimeOverrides.contains(device_id) || !runtimeOverrides[device_id].is_object()) {
+            runtimeOverrides[device_id] = json::object();
+        }
+        deep_merge_json(runtimeOverrides[device_id], override_patch);
+    }
+    compute_and_cache();
+    return true;
+}
+
+bool PhysicsEngine::clear_runtime_overrides() {
+    {
+        std::lock_guard<std::mutex> lk(runtimeOverridesMutex);
+        runtimeOverrides = json::object();
+    }
+    compute_and_cache();
+    return true;
+}
+
+bool PhysicsEngine::clear_runtime_override(const std::string& device_id) {
+    if (device_id.empty()) return false;
+    bool any = false;
+    {
+        std::lock_guard<std::mutex> lk(runtimeOverridesMutex);
+        if (runtimeOverrides.is_object() && runtimeOverrides.contains(device_id)) {
+            runtimeOverrides.erase(device_id);
+            any = true;
+        }
+    }
+    if (any) compute_and_cache();
+    return any;
+}
+
+json PhysicsEngine::get_runtime_overrides_snapshot() {
+    std::lock_guard<std::mutex> lk(runtimeOverridesMutex);
+    return runtimeOverrides;
 }
 
 double PhysicsEngine::clamp(double v, double lo, double hi) {

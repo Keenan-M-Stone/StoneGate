@@ -11,6 +11,7 @@
 
 #include "stonegate_api.hpp"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,21 @@ inline json decode_via_rpc(
     }
   }
   return client.rpc("qec.decode", params, timeout_ms);
+}
+
+inline json benchmark_via_rpc(
+    const stonegate::Client& client,
+    const std::string& code,
+    double p_flip,
+    int rounds = 3,
+    int shots = 1000,
+    const json& params_in = json::object(),
+    std::uint64_t seed = 0,
+    int timeout_ms = 20000) {
+  json params = json{{"code", code}, {"p_flip", p_flip}, {"rounds", rounds}, {"shots", shots}};
+  if (seed != 0) params["seed"] = seed;
+  if (params_in.is_object() && !params_in.empty()) params["params"] = params_in;
+  return client.rpc("qec.benchmark", params, timeout_ms);
 }
 
 }  // namespace qec

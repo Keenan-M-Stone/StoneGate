@@ -46,3 +46,26 @@ export type QECStatus = {
   status: 'queued' | 'running' | 'done' | 'error';
   progress?: number;
 };
+
+export type QECBenchmarkRequest = {
+  job_id?: string;
+  code: 'repetition' | 'surface' | 'custom';
+  p_flip: number;
+  rounds: number;
+  shots: number;
+  seed?: number;
+  params?: Record<string, any>;
+};
+
+export type QECBenchmarkResult = {
+  job_id: string;
+  status: 'done' | 'error';
+  statistics: {
+    shots: number;
+    rounds: number;
+    p_flip: number;
+    raw_error_rate: number;
+    decoded_error_rate: number;
+    code: string;
+  };
+};

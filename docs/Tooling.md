@@ -152,6 +152,54 @@ The backend will also send non-RPC messages like `descriptor` (on connect) and `
 - `record.start` params: `{ streams: [{ device_id, metrics: string[], rate_hz: number }...], script_name?: string, operator?: string, file_base?: string }`
 - `record.stop` params: `{ recording_id: string }`
 - `qec.decode` params: QECRequest-ish object; returns a deterministic, toy decode result (majority vote)
+- `qec.benchmark` params: `{ code: "repetition"|"surface"|string, p_flip: number, rounds?: number, shots?: number, seed?: number, params?: object }`
+
+### Simulator QEC tool devices
+
+When running `./StoneGate --sim`, the simulator instantiates a canonical device graph from `shared/protocol/DeviceGraph.json`.
+The following QEC-oriented tools appear as first-class devices and can be controlled via `device.action`:
+
+- `syn0` (`SyndromeStream`): start/stop a synthetic syndrome stream
+  - Actions: `start`, `stop`, `set_code_type`, `set_rate_hz`
+- `noise0` (`NoiseSpectrometer`): synthesize a small spectral estimate
+  - Actions: `set_band_hz`, `set_duration_s`, `run_scan`
+- `rocal0` (`ReadoutCalibrator`): synthesize a readout histogram/threshold/SNR
+  - Actions: `set_target_device`, `set_samples`, `calibrate`
+- `fault0` (`FaultInjector`): runtime environment patching and device overrides (in-memory)
+  - Actions: `set_env`, `override_device`, `clear_overrides`, `disable`, `set_notes`
+- `leak0` (`LeakageResetController`): leakage fraction + reset attempt modeling
+  - Actions: `set_target_device`, `set_leakage_fraction`, `attempt_reset`
+- `surf0` (`SurfaceCodeController`): toy cycle counter + logical-error estimate
+  - Actions: `configure` (e.g. `{distance}`), `run_cycles` (e.g. `{cycles}`), `stop`
+- `surg0` (`LatticeSurgeryController`): operation selection + demo run
+  - Actions: `set_operation`, `run_demo`
+
+Example commands (C++ toolbox client):
+
+```bash
+# If 8080 is in use, run the simulator on an alternate port.
+cd backend/build
+./StoneGate --sim --port 8082
+
+cd ../../
+./tools/build/toolbox_ws_client ws://localhost:8082/status devices.list
+
+# Start a syndrome stream.
+./tools/build/toolbox_ws_client ws://localhost:8082/status device.action \
+  '{"device_id":"syn0","action":{"set_code_type":"repetition","set_rate_hz":5,"start":true}}'
+
+# Run a noise scan.
+./tools/build/toolbox_ws_client ws://localhost:8082/status device.action \
+  '{"device_id":"noise0","action":{"set_band_hz":2000,"set_duration_s":0.5,"run_scan":true}}'
+
+# Apply a fault: raise temperature to increase p_flip.
+./tools/build/toolbox_ws_client ws://localhost:8082/status device.action \
+  '{"device_id":"fault0","action":{"set_env":{"temperature_K":150}}}'
+
+# Benchmark repetition-code majority vote.
+./tools/build/toolbox_ws_client ws://localhost:8082/status qec.benchmark \
+  '{"code":"repetition","p_flip":0.15,"rounds":5,"shots":2000,"seed":123}'
+```
 
 ### SDK generation (Python + C++)
 
@@ -218,11 +266,11 @@ pip install -e .
 
 stonegate-toolbox --ws ws://localhost:8080/status devices.list
 stonegate-toolbox --ws ws://localhost:8080/status devices.poll
-stonegate-toolbox --ws ws://localhost:8080/status device.action sim_ln2 '{"set":{"flow_rate_Lmin":2.5}}'
+stonegate-toolbox --ws ws://localhost:8080/status device.action ln2 '{"set":{"flow_rate_Lmin":2.5}}'
 
 # Start a recording (JSON array of streams)
 stonegate-toolbox --ws ws://localhost:8080/status record.start \
-  '[{"device_id":"sim_ln2","metrics":["temperature_K","flow_rate_Lmin"],"rate_hz":2.0}]' \
+  '[{"device_id":"ln2","metrics":["temperature_K","flow_rate_Lmin"],"rate_hz":2.0}]' \
   --script-name "My Macro" --operator "keenan" --file-base "my_macro"
 
 # Stop a recording
@@ -247,5 +295,5 @@ Run:
 
 ```bash
 ./tools/build/toolbox_ws_client ws://localhost:8080/status devices.list
-./tools/build/toolbox_ws_client ws://localhost:8080/status device.action '{"device_id":"sim_ln2","action":{"set":{"flow_rate_Lmin":2.5}}}'
+./tools/build/toolbox_ws_client ws://localhost:8080/status device.action '{"device_id":"ln2","action":{"set":{"flow_rate_Lmin":2.5}}}'
 ```

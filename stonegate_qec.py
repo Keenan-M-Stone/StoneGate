@@ -114,8 +114,182 @@ async def decode_via_rpc(
     return await sg.rpc("qec.decode", params, timeout_s=timeout_s)
 
 
+async def benchmark_via_rpc(
+    *,
+    code: str,
+    p_flip: Optional[float] = None,
+    rounds: int = 3,
+    shots: int = 1000,
+    seed: Optional[int] = None,
+    params: Optional[Dict[str, Any]] = None,
+    timeout_s: float = 20.0,
+    qec_device_id: str = "qec0",
+) -> Any:
+    """Call the backend `qec.benchmark` RPC.
+
+    If `p_flip` is omitted, this will try to read it from `qec_device_id` via `devices.poll`.
+    """
+
+    if p_flip is None:
+        _tK, p = await read_noise_estimate(qec_device_id=qec_device_id)
+        p_flip = float(p) if p is not None else 0.01
+
+    req: Dict[str, Any] = {
+        "code": str(code),
+        "p_flip": float(p_flip),
+        "rounds": int(rounds),
+        "shots": int(shots),
+    }
+    if seed is not None:
+        req["seed"] = int(seed)
+    if params is not None:
+        req["params"] = dict(params)
+
+    return await sg.rpc("qec.benchmark", req, timeout_s=timeout_s)
+
+
+async def benchmark_repetition_from_hardware(
+    *,
+    rounds: int,
+    shots: int = 2000,
+    seed: Optional[int] = None,
+    qec_device_id: str = "qec0",
+    timeout_s: float = 20.0,
+) -> Any:
+    """Convenience wrapper: repetition-code benchmark using the simulator's reported p_flip."""
+
+    return await benchmark_via_rpc(
+        code="repetition",
+        p_flip=None,
+        rounds=rounds,
+        shots=shots,
+        seed=seed,
+        qec_device_id=qec_device_id,
+        timeout_s=timeout_s,
+    )
+
+
+async def benchmark_surface_heuristic(
+    *,
+    distance: int = 5,
+    p_flip: Optional[float] = None,
+    qec_device_id: str = "qec0",
+    timeout_s: float = 20.0,
+) -> Any:
+    """Surface-code heuristic benchmark (backend-owned scaling-law model)."""
+
+    return await benchmark_via_rpc(
+        code="surface",
+        p_flip=p_flip,
+        rounds=1,
+        shots=1,
+        params={"distance": int(distance)},
+        qec_device_id=qec_device_id,
+        timeout_s=timeout_s,
+    )
+
+
 def make_measurement(*, qubit: int, basis: str, round: int, value: int) -> Measurement:
     return {"qubit": int(qubit), "basis": str(basis), "round": int(round), "value": int(value)}
+
+
+# ---- Simulator QEC tooling convenience wrappers (device.action)
+
+
+async def syndrome_stream_start(
+    *,
+    device_id: str = "syn0",
+    code_type: str = "repetition",
+    rate_hz: float = 10.0,
+) -> None:
+    await sg.device_action(device_id, {"set_code_type": str(code_type), "set_rate_hz": float(rate_hz), "start": True})
+
+
+async def syndrome_stream_stop(*, device_id: str = "syn0") -> None:
+    await sg.device_action(device_id, {"stop": True})
+
+
+async def noise_spectrometer_scan(
+    *,
+    device_id: str = "noise0",
+    band_hz: float = 2000.0,
+    duration_s: float = 0.5,
+) -> None:
+    await sg.device_action(device_id, {"set_band_hz": float(band_hz), "set_duration_s": float(duration_s), "run_scan": True})
+
+
+async def readout_calibrate(
+    *,
+    device_id: str = "rocal0",
+    target_device: str = "det0",
+    samples: int = 500,
+) -> None:
+    await sg.device_action(device_id, {"set_target_device": str(target_device), "set_samples": int(samples), "calibrate": True})
+
+
+async def fault_inject_set_env(
+    *,
+    device_id: str = "fault0",
+    temperature_K: Optional[float] = None,
+    pressure_kPa: Optional[float] = None,
+    ambient_lux: Optional[float] = None,
+    vibration_rms: Optional[float] = None,
+) -> None:
+    patch: Dict[str, float] = {}
+    if temperature_K is not None:
+        patch["temperature_K"] = float(temperature_K)
+    if pressure_kPa is not None:
+        patch["pressure_kPa"] = float(pressure_kPa)
+    if ambient_lux is not None:
+        patch["ambient_lux"] = float(ambient_lux)
+    if vibration_rms is not None:
+        patch["vibration_rms"] = float(vibration_rms)
+    if patch:
+        await sg.device_action(device_id, {"set_env": patch})
+
+
+async def fault_inject_override_device(
+    *,
+    device_id: str = "fault0",
+    target_device_id: str,
+    override: Dict[str, Any],
+) -> None:
+    await sg.device_action(device_id, {"override_device": {"device_id": str(target_device_id), "override": dict(override)}})
+
+
+async def fault_inject_clear_overrides(*, device_id: str = "fault0") -> None:
+    await sg.device_action(device_id, {"clear_overrides": True})
+
+
+async def leakage_set_fraction(
+    *,
+    device_id: str = "leak0",
+    target_device: str = "qec0",
+    leakage_fraction: float,
+) -> None:
+    await sg.device_action(device_id, {"set_target_device": str(target_device), "set_leakage_fraction": float(leakage_fraction)})
+
+
+async def leakage_attempt_reset(*, device_id: str = "leak0") -> None:
+    await sg.device_action(device_id, {"attempt_reset": True})
+
+
+async def surface_configure_and_run(
+    *,
+    device_id: str = "surf0",
+    distance: int = 5,
+    cycles: int = 25,
+) -> None:
+    await sg.device_action(device_id, {"configure": {"distance": int(distance)}})
+    await sg.device_action(device_id, {"run_cycles": {"cycles": int(cycles)}})
+
+
+async def lattice_surgery_run_demo(
+    *,
+    device_id: str = "surg0",
+    operation: str = "merge",
+) -> None:
+    await sg.device_action(device_id, {"set_operation": str(operation), "run_demo": True})
 
 async def read_qec_status(
     *,

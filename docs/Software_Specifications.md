@@ -18,7 +18,7 @@ specific implementations for quantum architecture are combined with the overall 
 - C++ toolchain (GCC/Clang/MSVC) and CMake for building the backend and tools
 - `libcurl` development headers (e.g. `libcurl4-openssl-dev`) to build the C++ QEC client example
 - `nlohmann::json` header (packaged as `nlohmann-json3-dev` on Debian/Ubuntu) for JSON parsing in C++
-- Python 3 with `flask` (and optionally `jsonschema`) to run the QEC prototype stub
+- Python 3 for SDK helpers and notebooks (see `tools/generate_stonegate_sdk.py`)
 
 ## Contents
 
@@ -41,8 +41,8 @@ The software is separated into:
 
 - Frontend (React): schematic editor, device panels, diagnostics dialogs, build-mode UI
 - Backend (C++): device registry, drivers, simulator, physics engine, WebSocket server
-- QEC service (prototype Flask): QEC job submission and parts/device override management
-  (See `StoneGate/tools/`)
+- QEC tooling (development/demo): WebSocket RPCs (`qec.decode`, `qec.benchmark`) plus simulator devices
+  (See `shared/protocol/DeviceGraph.json` and `shared/protocol/ComponentSchema.json`)
 
 This specification documents user-facing behavior (dialogs), the allowed inputs and validation rules,
 the control calculations used by backend and frontend decision logic, and detailed error messages (Cause/Action).
@@ -118,19 +118,19 @@ Dialog titles, primary action, cancel action, and expected lifecycle are listed.
        If a control could lead to unsafe state (as defined by the device `specs.safety` flags),
        a confirmation modal is presented describing the risk.
      - Manual control requests are sent via WebSocket control messages:  
-       `{"type":"control","device_id":"<id>","action":{...}}`
-     - The server responds with an acknowledgement message (over WebSocket) with the same `device_id`
-       and a status field `ack: accepted|rejected|error`.
+       `{"type":"control","cmd":"action","device_id":"<id>","action":{...}}`
+     - The server responds with an acknowledgement message (`type: control_ack`) or an RPC response if using the RPC channel.
 
 1) **Diagnostics / QEC Submission Dialog**
-   - Purpose: Select measurement windows and submit data to QEC service.
+  - Purpose: Select measurement windows and submit data to QEC tooling.
    - Behavior:
      - User selects devices and time-range (or capture windows) using present measurement history.
      - Client performs basic sanity checks:  
        At least one device selected, time-range non-empty, sampling rate meets QEC service limits
        (e.g., minimum sampling > 1 Hz if required by the chosen QEC algorithm).
-     - On submit, a `POST /api/qec/submit` with the JSON payload matching `QECRequest.json` is performed.
-       UI shows job progress using `GET /api/qec/status/<job_id>` and retrieves result via `GET /api/qec/result/<job_id>`.
+     - On submit, the frontend can call WebSocket RPCs:
+       - `qec.decode` (toy decode)
+       - `qec.benchmark` (demo benchmarking harness)
 
 ## Frontend Interaction Details
 
@@ -406,10 +406,14 @@ See: [[3]](#citations), [[4]](#citations) in [Citations](#citations)
 
 ## Supported error-correction algorithms and adaptation logic
 
-The software's QEC module is a pluggable stub. The framework supports integrating external decoders. Presently the prototype supports:
+The framework supports integrating external decoders, but the development backend currently includes a backend-owned QEC demo surface:
 
-- Repetition code (simple majority voting over repeated measurements)
-- Surface code (stub interface; real decoder integration expected via plugin)
+- `qec.decode` (WebSocket RPC): deterministic repetition-code-like majority vote over measurement bits
+- `qec.benchmark` (WebSocket RPC): lightweight benchmarking harness
+  - `code: "repetition"`: Monte Carlo majority vote over `rounds` and `shots`
+  - `code: "surface"`: heuristic scaling law vs. physical error rate and code distance
+
+In addition, the simulator includes QEC-oriented tool devices (e.g., `SyndromeStream`, `NoiseSpectrometer`, `FaultInjector`) driven via `device.action`.
 
 ### Adaptation rules (how to choose or parameterize a decoder)
 
@@ -452,13 +456,21 @@ This section lists the hardware-relevant specs the software uses or expects to q
 
 <span id="citations"></span>
 
-**[1]** C. Kittel and H. Kroemer, "Thermal Physics"; Y. Ozisik, "Heat Conduction"; [Wikipedia: Heat Equation](https://en.wikipedia.org/wiki/Heat_equation)
+**[1]** C. Kittel and H. Kroemer, *Thermal Physics*; M. N. Özışık, *Heat Conduction*
 
-**[2]** S. M. Kay, "Fundamentals of Statistical Signal Processing" (Estimation Theory); R. G. Gallager, "Principles of Digital Communication"
+**[2]** S. M. Kay, *Fundamentals of Statistical Signal Processing, Volume I: Estimation Theory*; R. G. Gallager, *Principles of Digital Communication*
 
-**[3]** A. G. Fowler et al., "Surface codes: Towards practical large-scale quantum computation", arXiv:1208.0928 ([arXiv link](https://arxiv.org/abs/1208.0928))
+**[3]** M. A. Nielsen and I. L. Chuang, *Quantum Computation and Quantum Information* (Cambridge University Press)
 
-**[4]** M. Nielsen & I. Chuang, "Quantum Computation and Quantum Information"; D. A. Lidar and T. A. Brun (eds.), "Quantum Error Correction" (Cambridge University Press)
+**[4]** D. Gottesman, *Stabilizer Codes and Quantum Error Correction* (PhD thesis, Caltech, 1997)
+
+**[5]** E. Dennis, A. Kitaev, A. Landahl, and J. Preskill, "Topological quantum memory", *Journal of Mathematical Physics* 43, 4452 (2002)
+
+**[6]** A. G. Fowler, M. Mariantoni, J. M. Martinis, and A. N. Cleland, "Surface codes: Towards practical large-scale quantum computation", *Physical Review A* 86, 032324 (2012)
+
+**[7]** B. M. Terhal, "Quantum error correction for quantum memories", *Reviews of Modern Physics* 87, 307 (2015)
+
+**[8]** D. A. Lidar and T. A. Brun (eds.), *Quantum Error Correction* (Cambridge University Press)
 
 ---
 
