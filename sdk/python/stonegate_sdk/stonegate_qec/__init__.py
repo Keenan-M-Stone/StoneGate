@@ -1,9 +1,9 @@
 # Generated file.
-# Do not edit in sdk/. Edit the repo root sources instead:
-#   - stonegate_api.py
-#   - stonegate_qec.py
-#   - stonegate_api.hpp
-#   - stonegate_qec.hpp
+# Do not edit in sdk/. Edit the source-of-truth files instead:
+#   - tools/sdk_sources/stonegate_api.py
+#   - tools/sdk_sources/stonegate_qec.py
+#   - tools/sdk_sources/stonegate_api.hpp
+#   - tools/sdk_sources/stonegate_qec.hpp
 # Regenerate with: python3 tools/generate_stonegate_sdk.py
 
 """StoneGate quantum error correction (QEC) helpers.
@@ -298,6 +298,7 @@ async def lattice_surgery_run_demo(
     operation: str = "merge",
 ) -> None:
     await sg.device_action(device_id, {"set_operation": str(operation), "run_demo": True})
+
 
 async def read_qec_status(
     *,

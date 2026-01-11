@@ -291,6 +291,7 @@ async def lattice_surgery_run_demo(
 ) -> None:
     await sg.device_action(device_id, {"set_operation": str(operation), "run_demo": True})
 
+
 async def read_qec_status(
     *,
     qec_device_id: str = "qec0",

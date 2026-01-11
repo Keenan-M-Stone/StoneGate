@@ -3,10 +3,14 @@
 """Generate installable StoneGate SDK artifacts (Python + C++).
 
 This repo keeps the *source of truth* for the SDK in:
-  - stonegate_api.py
-  - stonegate_qec.py
-  - stonegate_api.hpp
-    - stonegate_qec.hpp
+    - tools/sdk_sources/stonegate_api.py
+    - tools/sdk_sources/stonegate_qec.py
+    - tools/sdk_sources/stonegate_api.hpp
+    - tools/sdk_sources/stonegate_qec.hpp
+
+Convenience shims are also kept at the repo root for backwards-compatible usage:
+    - stonegate_api.py / stonegate_qec.py
+    - stonegate_api.hpp / stonegate_qec.hpp
 
 Running this script will write a distributable layout under:
   - sdk/python/stonegate_sdk/
@@ -54,10 +58,11 @@ def _write_if_changed(path: Path, text: str) -> bool:
 def generate(*, repo_root: Path) -> list[Path]:
     changed: list[Path] = []
 
-    api_py = repo_root / "stonegate_api.py"
-    qec_py = repo_root / "stonegate_qec.py"
-    api_hpp = repo_root / "stonegate_api.hpp"
-    qec_hpp = repo_root / "stonegate_qec.hpp"
+    sources = repo_root / "tools" / "sdk_sources"
+    api_py = sources / "stonegate_api.py"
+    qec_py = sources / "stonegate_qec.py"
+    api_hpp = sources / "stonegate_api.hpp"
+    qec_hpp = sources / "stonegate_qec.hpp"
 
     missing = [p for p in (api_py, qec_py, api_hpp, qec_hpp) if not p.exists()]
     if missing:
@@ -68,11 +73,11 @@ def generate(*, repo_root: Path) -> list[Path]:
 
     header = (
         "# Generated file.\n"
-        "# Do not edit in sdk/. Edit the repo root sources instead:\n"
-        "#   - stonegate_api.py\n"
-        "#   - stonegate_qec.py\n"
-        "#   - stonegate_api.hpp\n"
-        "#   - stonegate_qec.hpp\n"
+        "# Do not edit in sdk/. Edit the source-of-truth files instead:\n"
+        "#   - tools/sdk_sources/stonegate_api.py\n"
+        "#   - tools/sdk_sources/stonegate_qec.py\n"
+        "#   - tools/sdk_sources/stonegate_api.hpp\n"
+        "#   - tools/sdk_sources/stonegate_qec.hpp\n"
         "# Regenerate with: python3 tools/generate_stonegate_sdk.py\n\n"
     )
 

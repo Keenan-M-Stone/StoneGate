@@ -208,7 +208,13 @@ The repo includes lightweight SDK helpers (used by Macro Wizard exports and tool
 - Python: `stonegate_api` and `stonegate_qec`
 - C++: `stonegate_api.hpp` and `stonegate_qec.hpp`
 
-These are kept as *source of truth* at repo root, and can be generated into installable/distributable artifacts under `sdk/`:
+Source-of-truth for the SDK lives under `tools/sdk_sources/`.
+
+For convenience (Macro Wizard exports, copy/paste examples), the repo also keeps repo-root shims:
+- `stonegate_api.py`, `stonegate_qec.py`
+- `stonegate_api.hpp`, `stonegate_qec.hpp`
+
+The generator writes installable/distributable artifacts under `sdk/`:
 
 ```bash
 cd /path/to/StoneGate
