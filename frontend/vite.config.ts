@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import fs from 'node:fs'
+import { execSync } from 'node:child_process'
 
 function stonegateAdminDevApi() {
   return {
@@ -78,5 +80,26 @@ function stonegateAdminDevApi() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: (() => {
+    let version = '0.0.0'
+    try {
+      const raw = fs.readFileSync(new URL('./package.json', import.meta.url), 'utf8')
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed.version === 'string') version = parsed.version
+    } catch {}
+
+    let commit = 'unknown'
+    try {
+      commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+    } catch {}
+
+    const buildTime = new Date().toISOString()
+
+    return {
+      __STONEGATE_FE_VERSION__: JSON.stringify(version),
+      __STONEGATE_FE_COMMIT__: JSON.stringify(commit),
+      __STONEGATE_FE_BUILD_TIME__: JSON.stringify(buildTime),
+    }
+  })(),
   plugins: [react(), stonegateAdminDevApi()],
 })

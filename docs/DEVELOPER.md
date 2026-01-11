@@ -10,6 +10,8 @@ Developer notes can also be found in the main `README.md` doc for the repository
 - WebSocket endpoint (frontend): `VITE_BACKEND_WS_URL` (default: `ws://localhost:8080/status`).
   - Simulator mode (backend: `./StoneGate --sim`): `ws://localhost:8080/status`.
   - Hardware/default mode (backend: `./StoneGate`): `ws://localhost:9001/status`.
+  - Note: if you change the endpoint in the UI, it is persisted in `localStorage` under `stonegate.ws_url`.
+    Use the Connection Panel **Reset/Default** button to clear the override and reconnect using the build default.
   The frontend `Backend` client connects to this URL and expects two main message shapes:
 
   - Batch measurement update:
@@ -78,6 +80,12 @@ pnpm stonegate:ps:json
 # Watch backend activity (polls devices.poll periodically)
 pnpm stonegate:watch
 pnpm stonegate:watch -- --interval 0.5
+
+# Installation Wizard content pipeline
+
+- Source-of-truth: `docs/installation-wizard.md`
+- Generated file: `frontend/src/generated/installWizard.ts`
+- Regenerate: `pnpm -C frontend wizard:build` (also runs automatically as part of `pnpm -C frontend build`).
 pnpm stonegate:watch:once
 
 # Stop only safe instances (frontend dev servers + backends launched with --sim)

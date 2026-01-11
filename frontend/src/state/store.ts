@@ -35,6 +35,7 @@ interface DeviceState {
   upsertDevice: (d: DeviceStatus) => void
   upsertDescriptor: (d: DeviceDescriptor) => void
   setSchematicOverride: (o: SchematicOverride | null) => void
+  resetRuntimeState: () => void
 }
 
 export const useDeviceStore = create<DeviceState>((set, _get) => ({
@@ -56,6 +57,7 @@ export const useDeviceStore = create<DeviceState>((set, _get) => ({
       },
     })),
   setSchematicOverride: (o) => set({ schematicOverride: o }),
+  resetRuntimeState: () => set({ devices: {}, descriptors: {} }),
 }))
 
 // helper for non-hook updates

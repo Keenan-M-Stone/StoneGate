@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "wizard:build": "node ../tools/install-wizard/build.mjs",
+    "build": "pnpm -s wizard:build && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "stonegate:ps": "node scripts/stonegate-admin.mjs list",

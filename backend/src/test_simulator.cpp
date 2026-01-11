@@ -2,9 +2,34 @@
 #include "DeviceRegistry.hpp"
 #include "simulator/Simulator.hpp"
 #include <cstdlib>
+#include <filesystem>
+
+static std::string default_graph_path() {
+    if (const char* envp = std::getenv("STONEGATE_GRAPH_PATH")) {
+        if (envp && *envp) return std::string(envp);
+    }
+
+    // Probe common repo-relative locations. This binary is often run from `backend/build/`.
+    const std::filesystem::path cwd = std::filesystem::current_path();
+    const std::filesystem::path candidates[] = {
+        cwd / "shared" / "protocol" / "DeviceGraph.json",
+        cwd / ".." / "shared" / "protocol" / "DeviceGraph.json",
+        cwd / ".." / ".." / "shared" / "protocol" / "DeviceGraph.json",
+    };
+    for (const auto& p : candidates) {
+        try {
+            if (std::filesystem::exists(p)) return p.string();
+        } catch (...) {
+            // ignore and keep probing
+        }
+    }
+
+    // Fallback to the historical path.
+    return "../shared/protocol/DeviceGraph.json";
+}
 
 int main(int argc, char** argv) {
-    std::string graph = "../shared/protocol/DeviceGraph.json";
+    std::string graph = default_graph_path();
     uint64_t seed = 0;
     for (int i = 1; i < argc; ++i) {
         std::string s(argv[i]);

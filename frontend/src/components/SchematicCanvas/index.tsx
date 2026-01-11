@@ -104,6 +104,8 @@ return (
           const x = n.x - size.width/2
           const y = n.y - size.height/2
 
+          const schemaForType = (activeSchema as any)?.[n.type]
+
           return (
             <foreignObject key={n.id} x={x} y={y} width={size.width} height={size.height}>
               <div
@@ -142,7 +144,7 @@ return (
                   label={n.label}
                   type={n.type}
                   status={status}
-                  schema={(activeSchema as any)?.[n.type]}
+                  schema={schemaForType}
                   buildMode={buildMode}
                   width={size.width}
                   height={size.height}

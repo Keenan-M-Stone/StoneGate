@@ -44,6 +44,9 @@ compile_commands.json
 # Recordings / generated data
 shared/recordings/
 
+# Generated / accidental artifacts
+shared/protocol/schematics/
+
 # Coverage
 coverage/
 *.gcda

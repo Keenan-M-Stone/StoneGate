@@ -3,6 +3,9 @@ import Backend from '../api/backend'
 import { useDeviceStore } from '../state/store'
 import History from '../state/history'
 import DeviceActionDialog from './DeviceActionDialog'
+import { captureSnapshotNow, getSnapshot, listSnapshotNames, putSnapshot } from '../utils/snapshots'
+import FloatingWindow from './FloatingWindow'
+import { logFrontend } from '../state/logStore'
 
 const MACROS_KEY = 'stonegate_script_macros_v2'
 const LAYOUT_KEY = 'stonegate_macro_wizard_layout_v1'
@@ -46,6 +49,29 @@ type SleepStep = StepBase & {
   ms: number
 }
 
+type SnapshotCaptureStep = StepBase & {
+  kind: 'snapshotCapture'
+  snapshot_name: string
+  overwrite: boolean
+  autoRename: boolean
+}
+
+type SnapshotApplyStep = StepBase & {
+  kind: 'snapshotApply'
+  snapshot_name: string
+  tolerance: number
+  consecutive: number
+  timeout_ms: number
+}
+
+type SnapshotWaitStep = StepBase & {
+  kind: 'snapshotWait'
+  snapshot_name: string
+  tolerance: number
+  consecutive: number
+  timeout_ms: number
+}
+
 type RecordBlockStep = StepBase & {
   kind: 'record'
   params: any
@@ -66,7 +92,16 @@ type IfElseBlockStep = StepBase & {
   elseSteps: Step[]
 }
 
-type Step = DeviceActionStep | WaitForStableStep | SleepStep | RecordBlockStep | WhileBlockStep | IfElseBlockStep
+type Step =
+  | DeviceActionStep
+  | WaitForStableStep
+  | SleepStep
+  | SnapshotCaptureStep
+  | SnapshotApplyStep
+  | SnapshotWaitStep
+  | RecordBlockStep
+  | WhileBlockStep
+  | IfElseBlockStep
 
 type ScriptMacro = {
   id: string
@@ -82,8 +117,6 @@ type ScriptMacro = {
 
 type ValidationError = { stepId: string; message: string }
 type LogEntry = { ts: string; line: string; stepId?: string }
-
-type Layout = { x: number; y: number; w: number; h: number }
 
 type MenuItem = { label: string; onClick: () => void; disabled?: boolean }
 type ContextMenuState = { x: number; y: number; items: MenuItem[] } | null
@@ -118,22 +151,6 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n))
 }
 
-function clampLayoutToViewport(l: Layout, margin = 12): Layout {
-  const vw = Math.max(320, window.innerWidth || 0)
-  const vh = Math.max(240, window.innerHeight || 0)
-
-  const maxW = Math.max(320, vw - margin * 2)
-  const maxH = Math.max(240, vh - margin * 2)
-
-  const w = clamp(l.w, 320, maxW)
-  const h = clamp(l.h, 240, maxH)
-
-  const x = clamp(l.x, 0, Math.max(0, vw - w))
-  const y = clamp(l.y, 0, Math.max(0, vh - h))
-
-  return { x, y, w, h }
-}
-
 function evalCondition(latest: number | null | undefined, op: ConditionOp, value: number) {
   if (latest === null || latest === undefined || !Number.isFinite(latest)) return false
   switch (op) {
@@ -162,6 +179,15 @@ function stepDefault(kind: Step['kind']): Step {
   }
   if (kind === 'sleep') {
     return { id, name: 'Sleep', kind, ms: 500, enabled: true }
+  }
+  if (kind === 'snapshotCapture') {
+    return { id, name: 'Capture Snapshot', kind, snapshot_name: '', overwrite: false, autoRename: true, enabled: true }
+  }
+  if (kind === 'snapshotApply') {
+    return { id, name: 'Apply Snapshot Targets', kind, snapshot_name: '', tolerance: 0.5, consecutive: 3, timeout_ms: 60_000, enabled: true }
+  }
+  if (kind === 'snapshotWait') {
+    return { id, name: 'Wait For Snapshot', kind, snapshot_name: '', tolerance: 0.5, consecutive: 3, timeout_ms: 60_000, enabled: true }
   }
   if (kind === 'record') {
     return { id, name: 'Record', kind, params: {}, steps: [], enabled: true }
@@ -557,49 +583,9 @@ export default function MacroEditor() {
 
   const activeRecordingIdsRef = React.useRef<string[]>([])
 
-  const [layout, setLayout] = React.useState<Layout>(() => loadJson<Layout>(LAYOUT_KEY, { x: 12, y: 120, w: 520, h: 640 }))
-  const panelRef = React.useRef<HTMLDivElement | null>(null)
-  const dragRef = React.useRef<{ startX: number; startY: number; startLeft: number; startTop: number; dragging: boolean } | null>(null)
-
-  React.useEffect(() => {
-    // Ensure the panel is always reachable on-screen.
-    setLayout(prev => clampLayoutToViewport(prev))
-    const onResize = () => setLayout(prev => clampLayoutToViewport(prev))
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-
   React.useEffect(() => {
     saveJson(MACROS_KEY, macros)
   }, [macros])
-
-  React.useEffect(() => {
-    saveJson(LAYOUT_KEY, layout)
-  }, [layout])
-
-  React.useEffect(() => {
-    const el = panelRef.current
-    if (!el) return
-    let raf = 0
-    const ro = new ResizeObserver(entries => {
-      const ent = entries[0]
-      if (!ent) return
-      const cr = ent.contentRect
-      if (raf) cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => {
-        setLayout(prev => {
-          const next = clampLayoutToViewport({ ...prev, w: Math.round(cr.width), h: Math.round(cr.height) })
-          if (next.x === prev.x && next.y === prev.y && next.w === prev.w && next.h === prev.h) return prev
-          return next
-        })
-      })
-    })
-    ro.observe(el)
-    return () => {
-      if (raf) cancelAnimationFrame(raf)
-      ro.disconnect()
-    }
-  }, [])
 
   const appendLog = React.useCallback((line: string, stepId?: string) => {
     const ts = new Date().toLocaleTimeString()
@@ -637,6 +623,12 @@ export default function MacroEditor() {
         if (s.kind === 'waitForStable') {
           if (!s.device_id) errs.push({ stepId: s.id, message: `${name}: missing device_id` })
           if (!s.metric) errs.push({ stepId: s.id, message: `${name}: missing metric` })
+        }
+        if (s.kind === 'snapshotCapture') {
+          if (!s.snapshot_name) errs.push({ stepId: s.id, message: `${name}: missing snapshot name` })
+        }
+        if (s.kind === 'snapshotApply' || s.kind === 'snapshotWait') {
+          if (!s.snapshot_name) errs.push({ stepId: s.id, message: `${name}: missing snapshot name` })
         }
         if (s.kind === 'record') visit(s.steps, `${name} / `)
         if (s.kind === 'while') visit(s.steps, `${name} / `)
@@ -733,6 +725,12 @@ export default function MacroEditor() {
         return `${s.name} (${s.device_id || 'device'}:${s.metric || 'metric'})`
       case 'sleep':
         return `${s.name} (${s.ms}ms)`
+      case 'snapshotCapture':
+        return `${s.name} (${s.snapshot_name || 'snapshot'})`
+      case 'snapshotApply':
+        return `${s.name} (${s.snapshot_name || 'snapshot'})`
+      case 'snapshotWait':
+        return `${s.name} (${s.snapshot_name || 'snapshot'})`
       case 'record':
         return `${s.name} (block)`
       case 'while':
@@ -889,6 +887,7 @@ export default function MacroEditor() {
     setRunStatus('running')
     setCurrentStepId('')
     appendLog(`Run started: ${m.name}`)
+    logFrontend(`Starting run in Macro Wizard: ${m.name}`)
 
     type Frame =
       | { type: 'root'; steps: Step[]; i: number }
@@ -914,6 +913,61 @@ export default function MacroEditor() {
       const d = useDeviceStore.getState().devices[deviceId]
       const v = d?.measurements?.[metric]?.value
       return typeof v === 'number' ? v : null
+    }
+
+    const snapshotTargets = (snapshotName: string): Record<string, Record<string, number>> => {
+      const snap = getSnapshot(snapshotName)
+      if (!snap) throw new Error(`snapshot not found: ${snapshotName}`)
+      const out: Record<string, Record<string, number>> = {}
+      const updates = (snap.devices as any)?.poll?.updates
+      if (!Array.isArray(updates)) return out
+      for (const u of updates) {
+        const device_id = u?.device_id
+        const measurements = u?.measurements
+        if (typeof device_id !== 'string' || !measurements || typeof measurements !== 'object') continue
+        for (const [metric, m] of Object.entries(measurements)) {
+          const val = (m as any)?.value
+          if (typeof val !== 'number' || !Number.isFinite(val)) continue
+          if (!out[device_id]) out[device_id] = {}
+          out[device_id][metric] = val
+        }
+      }
+      return out
+    }
+
+    const waitForTargets = async (targets: Record<string, Record<string, number>>, tolerance: number, consecutive: number, timeout_ms: number, stepId: string) => {
+      const deadline = Date.now() + Math.max(0, timeout_ms)
+      let okCount = 0
+      while (Date.now() < deadline) {
+        if (cancelRef.current) throw new Error('run-canceled')
+        await waitWhilePaused()
+
+        let allOk = true
+        for (const [deviceId, metrics] of Object.entries(targets)) {
+          for (const [metric, target] of Object.entries(metrics)) {
+            const latest = getLatest(deviceId, metric)
+            if (latest === null) {
+              allOk = false
+              break
+            }
+            const metaTol = descriptors[deviceId]?.metrics?.[metric]?.precision
+            const tol = Math.max(1e-6, Number.isFinite(metaTol as any) ? Number(metaTol) : 0, tolerance)
+            if (Math.abs(latest - target) > tol) {
+              allOk = false
+              break
+            }
+          }
+          if (!allOk) break
+        }
+
+        okCount = allOk ? okCount + 1 : 0
+        if (okCount >= Math.max(1, consecutive)) {
+          appendLog(`snapshot targets reached (${Object.keys(targets).length} device(s))`, stepId)
+          return
+        }
+        await new Promise(r => setTimeout(r, 250))
+      }
+      throw new Error('snapshot wait timed out')
     }
 
     try {
@@ -989,6 +1043,25 @@ export default function MacroEditor() {
         } else if (s.kind === 'sleep') {
           await new Promise(r => setTimeout(r, Math.max(0, s.ms)))
           setStatusFor(s.id, 'done')
+        } else if (s.kind === 'snapshotCapture') {
+          const base = (s.snapshot_name || '').trim() || s.name
+          const snap = await captureSnapshotNow(base)
+          const res = putSnapshot(snap.name, snap as any, { overwrite: s.overwrite, autoRename: s.autoRename })
+          if (!res.ok) throw new Error(res.error)
+          appendLog(`snapshot captured: ${res.name}`, s.id)
+          setStatusFor(s.id, 'done')
+        } else if (s.kind === 'snapshotApply') {
+          const targets = snapshotTargets(s.snapshot_name)
+          const deviceIds = Object.keys(targets)
+          for (const device_id of deviceIds) {
+            await Backend.rpc('device.action', { device_id, action: { set: targets[device_id] } }, 20_000)
+          }
+          await waitForTargets(targets, s.tolerance, s.consecutive, s.timeout_ms, s.id)
+          setStatusFor(s.id, 'done')
+        } else if (s.kind === 'snapshotWait') {
+          const targets = snapshotTargets(s.snapshot_name)
+          await waitForTargets(targets, s.tolerance, s.consecutive, s.timeout_ms, s.id)
+          setStatusFor(s.id, 'done')
         } else if (s.kind === 'waitForStable') {
           const deadline = Date.now() + Math.max(0, s.timeout_ms)
           let okCount = 0
@@ -1034,6 +1107,7 @@ export default function MacroEditor() {
       setCurrentStepId('')
       setRunStatus('finished')
       appendLog('Run finished')
+      logFrontend('Macro Wizard run finished')
 
       try {
         await applySafeState(m, 'finish')
@@ -1045,6 +1119,8 @@ export default function MacroEditor() {
         appendLog('Run canceled')
         setRunStatus('canceled')
 
+        logFrontend('Macro Wizard run canceled', 'warn')
+
         try {
           await applySafeState(m, 'cancel')
         } catch (ee: any) {
@@ -1053,6 +1129,8 @@ export default function MacroEditor() {
       } else {
         appendLog(`Run error: ${String(e?.message || e)}`)
         setRunStatus('error')
+
+        logFrontend(`Macro Wizard run error: ${String(e?.message || e)}`, 'error')
 
         try {
           await applySafeState(m, 'error')
@@ -1071,6 +1149,7 @@ export default function MacroEditor() {
     pauseRef.current = true
     setRunStatus('paused')
     appendLog('Paused')
+    logFrontend('Macro Wizard paused')
   }
 
   const resume = () => {
@@ -1078,12 +1157,14 @@ export default function MacroEditor() {
     pauseRef.current = false
     setRunStatus('running')
     appendLog('Resumed')
+    logFrontend('Macro Wizard resumed')
   }
 
   const cancel = async () => {
     if (runStatus !== 'running' && runStatus !== 'paused') return
     cancelRef.current = true
     pauseRef.current = false
+    logFrontend('Macro Wizard cancel requested', 'warn')
     await stopAllRecordings()
   }
 
@@ -1099,30 +1180,6 @@ export default function MacroEditor() {
     appendLog('Cancel block requested')
   }
 
-  const onHeaderPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button,select,input,textarea')) return
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startLeft: layout.x, startTop: layout.y, dragging: true }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }
-
-  const onHeaderPointerMove = (e: React.PointerEvent) => {
-    const d = dragRef.current
-    if (!d?.dragging) return
-    const dx = e.clientX - d.startX
-    const dy = e.clientY - d.startY
-    setLayout(prev => clampLayoutToViewport({ ...prev, x: d.startLeft + dx, y: d.startTop + dy }))
-  }
-
-  const onHeaderPointerUp = (e: React.PointerEvent) => {
-    const d = dragRef.current
-    if (!d) return
-    d.dragging = false
-    dragRef.current = null
-    try {
-      ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
-    } catch {}
-  }
-
   const openScriptMenu = (e: React.MouseEvent) => {
     e.preventDefault()
     setMenu({
@@ -1132,6 +1189,9 @@ export default function MacroEditor() {
         { label: 'Add Device Action', onClick: () => addStepAtEnd('deviceAction') },
         { label: 'Add Wait For Stable', onClick: () => addStepAtEnd('waitForStable') },
         { label: 'Add Sleep', onClick: () => addStepAtEnd('sleep') },
+        { label: 'Add Snapshot: Capture', onClick: () => addStepAtEnd('snapshotCapture') },
+        { label: 'Add Snapshot: Apply', onClick: () => addStepAtEnd('snapshotApply') },
+        { label: 'Add Snapshot: Wait', onClick: () => addStepAtEnd('snapshotWait') },
         { label: 'Add Record Block', onClick: () => addStepAtEnd('record') },
         { label: 'Add While Block', onClick: () => addStepAtEnd('while') },
         { label: 'Add If/Else Block', onClick: () => addStepAtEnd('ifElse') },
@@ -1918,107 +1978,78 @@ export default function MacroEditor() {
   }
 
   return (
-    <div
-      ref={panelRef}
-      style={{
-        position: 'fixed',
-        left: layout.x,
-        top: layout.y,
-        width: layout.w,
-        height: layout.h,
-        maxWidth: 'calc(100vw - 24px)',
-        maxHeight: 'calc(100vh - 24px)',
-        minWidth: 320,
-        minHeight: 240,
-        background: '#041018',
-        color: 'rgba(255,255,255,0.9)',
-        border: '1px solid rgba(255,255,255,0.18)',
-        borderRadius: 10,
-        zIndex: 90,
-        display: 'flex',
-        flexDirection: 'column',
-        resize: 'both',
-        overflow: 'hidden',
-      }}
+    <FloatingWindow
+      storageKey={LAYOUT_KEY}
+      defaultLayout={{ x: 12, y: 120, w: 520, h: 640 }}
+      title="Macro Wizard"
       onContextMenu={openScriptMenu}
+      header={
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <strong style={{ flex: 1 }}>Macro Wizard</strong>
+            <button title="Settings" onClick={openSettingsMenu} style={{ padding: '0.3em 0.6em' }}>
+              ⚙
+            </button>
+            <button title="Run" onClick={run} disabled={!selectedMacro || runStatus === 'running' || runStatus === 'paused'} style={{ padding: '0.3em 0.6em' }}>
+              ▶
+            </button>
+            <button title="Pause" onClick={pause} disabled={runStatus !== 'running'} style={{ padding: '0.3em 0.6em' }}>
+              ⏸
+            </button>
+            <button title="Resume" onClick={resume} disabled={runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
+              ⏵
+            </button>
+            <button title="Cancel script" onClick={cancel} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
+              ⏹
+            </button>
+            <button title="Skip step" onClick={skipStep} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
+              ⏭
+            </button>
+            <button title="Cancel block" onClick={cancelBlock} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
+              ⤫
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={newMacro} style={{ padding: '0.3em 0.7em' }}>New</button>
+            <button onClick={deleteMacro} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Delete</button>
+            <select value={selectedMacroId} onChange={e => setSelectedMacroId(e.target.value)} style={{ flex: 1, minWidth: 140 }}>
+              <option value="">-- select macro --</option>
+              {macros.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={selectedMacro?.name ?? ''}
+              disabled={!selectedMacro}
+              onChange={e => updateMacro(m => ({ ...m, name: e.target.value }))}
+              placeholder="Name"
+              style={{ flex: 1, minWidth: 140 }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={revalidate} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Revalidate</button>
+            <button onClick={openExportDialog} disabled={!selectedMacro && !macros.length} style={{ padding: '0.3em 0.7em' }}>Export…</button>
+            <button onClick={() => importFileInputRef.current?.click()} style={{ padding: '0.3em 0.7em' }}>Import</button>
+            <button onClick={loadBundled} style={{ padding: '0.3em 0.7em' }}>Load bundled</button>
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".json,.ipynb,application/json,application/x-ipynb+json"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const f = e.target.files?.[0]
+                if (f) onImportFile(f)
+                e.currentTarget.value = ''
+              }}
+            />
+          </div>
+        </>
+      }
     >
-      <div
-        style={{
-          padding: 6,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          borderBottom: '1px solid rgba(255,255,255,0.12)',
-          userSelect: 'none',
-          cursor: 'grab',
-        }}
-        onPointerDown={onHeaderPointerDown}
-        onPointerMove={onHeaderPointerMove}
-        onPointerUp={onHeaderPointerUp}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <strong style={{ flex: 1 }}>Macro Wizard</strong>
-          <button title="Settings" onClick={openSettingsMenu} style={{ padding: '0.3em 0.6em' }}>
-            ⚙
-          </button>
-          <button title="Run" onClick={run} disabled={!selectedMacro || runStatus === 'running' || runStatus === 'paused'} style={{ padding: '0.3em 0.6em' }}>
-            ▶
-          </button>
-          <button title="Pause" onClick={pause} disabled={runStatus !== 'running'} style={{ padding: '0.3em 0.6em' }}>
-            ⏸
-          </button>
-          <button title="Resume" onClick={resume} disabled={runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
-            ⏵
-          </button>
-          <button title="Cancel script" onClick={cancel} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
-            ⏹
-          </button>
-          <button title="Skip step" onClick={skipStep} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
-            ⏭
-          </button>
-          <button title="Cancel block" onClick={cancelBlock} disabled={runStatus !== 'running' && runStatus !== 'paused'} style={{ padding: '0.3em 0.6em' }}>
-            ⤫
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={newMacro} style={{ padding: '0.3em 0.7em' }}>New</button>
-          <button onClick={deleteMacro} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Delete</button>
-          <select value={selectedMacroId} onChange={e => setSelectedMacroId(e.target.value)} style={{ flex: 1, minWidth: 140 }}>
-            <option value="">-- select macro --</option>
-            {macros.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-          <input
-            value={selectedMacro?.name ?? ''}
-            disabled={!selectedMacro}
-            onChange={e => updateMacro(m => ({ ...m, name: e.target.value }))}
-            placeholder="Name"
-            style={{ flex: 1, minWidth: 140 }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={revalidate} disabled={!selectedMacro} style={{ padding: '0.3em 0.7em' }}>Revalidate</button>
-          <button onClick={openExportDialog} disabled={!selectedMacro && !macros.length} style={{ padding: '0.3em 0.7em' }}>Export…</button>
-          <button onClick={() => importFileInputRef.current?.click()} style={{ padding: '0.3em 0.7em' }}>Import</button>
-          <button onClick={loadBundled} style={{ padding: '0.3em 0.7em' }}>Load bundled</button>
-          <input
-            ref={importFileInputRef}
-            type="file"
-            accept=".json,.ipynb,application/json,application/x-ipynb+json"
-            style={{ display: 'none' }}
-            onChange={e => {
-              const f = e.target.files?.[0]
-              if (f) onImportFile(f)
-              e.currentTarget.value = ''
-            }}
-          />
-        </div>
-      </div>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: 8, overflow: 'auto' }}>
@@ -2189,6 +2220,101 @@ export default function MacroEditor() {
                               <div style={{ fontSize: 12, opacity: 0.8 }}>Timeout (ms)</div>
                               <input type="number" value={selectedStep.timeout_ms} disabled={!canEditStep(selectedStep.id)} onChange={e => setStep(selectedStep.id, { timeout_ms: Number(e.target.value) } as any)} />
                             </label>
+                          </div>
+                        </>
+                      )}
+
+                      {selectedStep.kind === 'snapshotCapture' && (
+                        <>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>Snapshot name</div>
+                            <input
+                              value={selectedStep.snapshot_name}
+                              disabled={!canEditStep(selectedStep.id)}
+                              onChange={e => setStep(selectedStep.id, { snapshot_name: e.target.value } as any)}
+                              placeholder="e.g. safe_idle"
+                            />
+                          </label>
+
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: canEditStep(selectedStep.id) ? 1 : 0.6 }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedStep.overwrite}
+                                disabled={!canEditStep(selectedStep.id)}
+                                onChange={e => setStep(selectedStep.id, { overwrite: e.target.checked } as any)}
+                              />
+                              Overwrite if exists
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: canEditStep(selectedStep.id) ? 1 : 0.6 }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedStep.autoRename}
+                                disabled={!canEditStep(selectedStep.id)}
+                                onChange={e => setStep(selectedStep.id, { autoRename: e.target.checked } as any)}
+                              />
+                              Auto-rename on conflict
+                            </label>
+                          </div>
+
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                            Captures current backend state + schematic into browser snapshot storage.
+                          </div>
+                        </>
+                      )}
+
+                      {(selectedStep.kind === 'snapshotApply' || selectedStep.kind === 'snapshotWait') && (
+                        <>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>Snapshot</div>
+                            <select
+                              value={selectedStep.snapshot_name}
+                              disabled={!canEditStep(selectedStep.id)}
+                              onChange={e => setStep(selectedStep.id, { snapshot_name: e.target.value } as any)}
+                            >
+                              <option value="">-- select snapshot --</option>
+                              {listSnapshotNames().map(n => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div style={{ fontSize: 12, opacity: 0.8 }}>Tolerance</div>
+                              <input
+                                type="number"
+                                value={selectedStep.tolerance}
+                                disabled={!canEditStep(selectedStep.id)}
+                                onChange={e => setStep(selectedStep.id, { tolerance: Number(e.target.value) } as any)}
+                              />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div style={{ fontSize: 12, opacity: 0.8 }}>Consecutive</div>
+                              <input
+                                type="number"
+                                value={selectedStep.consecutive}
+                                disabled={!canEditStep(selectedStep.id)}
+                                onChange={e => setStep(selectedStep.id, { consecutive: Number(e.target.value) } as any)}
+                              />
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <div style={{ fontSize: 12, opacity: 0.8 }}>Timeout (ms)</div>
+                              <input
+                                type="number"
+                                value={selectedStep.timeout_ms}
+                                disabled={!canEditStep(selectedStep.id)}
+                                onChange={e => setStep(selectedStep.id, { timeout_ms: Number(e.target.value) } as any)}
+                              />
+                            </label>
+                          </div>
+
+                          <div style={{ fontSize: 12, opacity: 0.8 }}>
+                            {selectedStep.kind === 'snapshotApply'
+                              ? 'Sends device.action setpoints from the snapshot, then waits until the instrument matches.'
+                              : 'Waits until the instrument matches the snapshot (no actions are sent).'}
                           </div>
                         </>
                       )}
@@ -2513,6 +2639,6 @@ export default function MacroEditor() {
           }}
         />
       )}
-    </div>
+    </FloatingWindow>
   )
 }

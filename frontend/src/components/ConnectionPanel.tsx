@@ -2,15 +2,26 @@ import React from 'react'
 import Backend from '../api/backend'
 import { useDeviceStore, useDeviceStoreRef } from '../state/store'
 
-export default function ConnectionPanel(){
+const AUTO_BACKEND_SCHEM_KEY = 'stonegate.auto_backend_schematic'
+
+function getAutoBackendSchematic(): boolean {
+  try { return (localStorage.getItem(AUTO_BACKEND_SCHEM_KEY) || 'false') === 'true' } catch { return false }
+}
+
+export default function ConnectionPanel({ buildMode = false }:{ buildMode?: boolean }){
   const [stats, setStats] = React.useState(Backend.stats())
   const [editing, setEditing] = React.useState(false)
   const [draft, setDraft] = React.useState('')
   const schematicOverride = useDeviceStore(s => s.schematicOverride)
+  const [autoBackendSchematic, setAutoBackendSchematic] = React.useState<boolean>(() => getAutoBackendSchematic())
   React.useEffect(()=>{
     const t = setInterval(()=> setStats(Backend.stats()), 500)
     return ()=> clearInterval(t)
   },[])
+
+  React.useEffect(() => {
+    try { localStorage.setItem(AUTO_BACKEND_SCHEM_KEY, autoBackendSchematic ? 'true' : 'false') } catch {}
+  }, [autoBackendSchematic])
 
   const changeEndpoint = () => {
     setDraft(stats.endpoint)
@@ -64,28 +75,49 @@ export default function ConnectionPanel(){
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button onClick={changeEndpoint} style={{ fontSize: 11 }}>Change</button>
             <button
-              onClick={async () => {
-                try {
-                  const res = await Backend.rpc('graph.get', { include_graph: true, include_schema: true }, 6000)
-                  if (!res?.available) throw new Error(res?.error ?? 'graph.get not available')
-                  useDeviceStoreRef.getState().setSchematicOverride({ graph: res.graph, schema: res.schema, meta: res })
-                } catch (e: any) {
-                  alert(`Failed to load backend schematic: ${String(e?.message ?? e)}`)
-                }
-              }}
-              disabled={!stats.connected}
+              onClick={() => Backend.resetEndpointToDefault()}
               style={{ fontSize: 11 }}
-              title="Load DeviceGraph/ComponentSchema from the backend (dev/advanced)"
+              title="Clear the saved endpoint override and reconnect using the build default (VITE_BACKEND_WS_URL)."
             >
-              Use Backend Schematic
+              Reset
             </button>
-            <button
-              onClick={() => useDeviceStoreRef.getState().setSchematicOverride(null)}
-              style={{ fontSize: 11 }}
-              title="Revert to the frontend's built-in schematic"
-            >
-              Use Local Schematic
-            </button>
+
+            {buildMode && (
+              <>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 11, opacity: 0.9 }} title="When enabled, switching endpoints auto-loads that backend's current schematic.">
+                  <input
+                    type="checkbox"
+                    checked={autoBackendSchematic}
+                    onChange={e => setAutoBackendSchematic(e.target.checked)}
+                  />
+                  Auto-load backend schematic
+                </label>
+
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await Backend.rpc('graph.get', { include_graph: true, include_schema: true }, 6000)
+                      if (!res?.available) throw new Error(res?.error ?? 'graph.get not available')
+                      useDeviceStoreRef.getState().setSchematicOverride({ graph: res.graph, schema: res.schema, meta: res })
+                    } catch (e: any) {
+                      alert(`Failed to load backend schematic: ${String(e?.message ?? e)}`)
+                    }
+                  }}
+                  disabled={!stats.connected}
+                  style={{ fontSize: 11 }}
+                  title="Load DeviceGraph/ComponentSchema from the backend (build-mode)"
+                >
+                  Use Backend Schematic
+                </button>
+                <button
+                  onClick={() => useDeviceStoreRef.getState().setSchematicOverride(null)}
+                  style={{ fontSize: 11 }}
+                  title="Revert to the frontend's built-in schematic"
+                >
+                  Use Local Schematic
+                </button>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -100,11 +132,21 @@ export default function ConnectionPanel(){
                 const next = draft.trim()
                 if (!next) return
                 Backend.setEndpoint(next)
-                window.location.reload()
+                setEditing(false)
               }}
               style={{ fontSize: 11 }}
             >
               Apply
+            </button>
+            <button
+              onClick={() => {
+                Backend.resetEndpointToDefault()
+                setEditing(false)
+              }}
+              style={{ fontSize: 11 }}
+              title="Clear the saved endpoint override and reconnect using the build default."
+            >
+              Default
             </button>
             <button onClick={() => setEditing(false)} style={{ fontSize: 11 }}>
               Cancel

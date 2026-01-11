@@ -108,6 +108,11 @@ int main(int argc, char** argv) {
     WebSocketServer server(port, registry, sim_mode, device_graph_path);
     server.start();
 
+    if (!server.is_running()) {
+        std::cerr << "Failed to start backend (port " << port << ")" << std::endl;
+        return 1;
+    }
+
     std::cout << "Quantum backend running on port " << port << "..." << std::endl;
 
     // Start a small stdin control thread to accept JSON control lines for development

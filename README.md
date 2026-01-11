@@ -76,6 +76,15 @@ pnpm install   # or npm install
 pnpm dev       # or npm run dev
 ```
 
+UI notes:
+- The **Tools** menu includes **Diagnostics**, **Installation Wizard**, and **Help**.
+- **Help** shows the frontend version, git commit, and build time (injected at build time).
+
+Installation Wizard content:
+- Source-of-truth: `docs/installation-wizard.md`
+- Generated file: `frontend/src/generated/installWizard.ts`
+- Regenerate manually: `pnpm -C frontend wizard:build` (also runs automatically during `pnpm -C frontend build`).
+
 ---
 
 ## Directory Structure
@@ -367,12 +376,12 @@ pnpm install   # or npm install
 pnpm dev       # or npm run dev
 ```
 
-Navigate to `http://localhost:3000` — the frontend will connect to `ws://localhost:9001` by default.
+Open the URL printed by Vite (typically `http://localhost:5173`). The frontend will connect to `ws://localhost:8080/status` by default.
 
 Notes:
-- Vite dev server defaults to `http://localhost:5173`.
 - The frontend WebSocket default is `ws://localhost:8080/status` (matches backend `--sim`).
   If you run the backend in hardware/default mode (port 9001), set `VITE_BACKEND_WS_URL='ws://localhost:9001/status'` before starting the frontend.
+  If you change the endpoint in the UI, it is persisted in `localStorage` under `stonegate.ws_url`; use the Connection Panel **Reset/Default** button to clear the override and return to the build default.
 
 ---
 
