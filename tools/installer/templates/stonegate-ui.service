@@ -1,0 +1,15 @@
+[Unit]
+Description=StoneGate UI (static)
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/stonegate/stonegate.env
+WorkingDirectory=/opt/stonegate
+# Prefer python for portability; serves /opt/stonegate/frontend/dist
+ExecStart=/usr/bin/python3 -m http.server ${UI_PORT:-5173} --bind ${UI_HOST:-127.0.0.1} --directory /opt/stonegate/frontend/dist
+Restart=on-failure
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

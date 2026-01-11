@@ -47,6 +47,12 @@ shared/recordings/
 # Generated / accidental artifacts
 shared/protocol/schematics/
 
+# Generated sdk
+sdk
+
+# Release bundles
+release/
+
 # Coverage
 coverage/
 *.gcda

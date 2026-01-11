@@ -83,6 +83,41 @@ Installation Wizard content:
 - Generated file: `frontend/src/generated/installWizard.ts`
 - Regenerate manually: `pnpm -C frontend wizard:build` (also runs automatically during `pnpm -C frontend build`).
 
+Note: the frontend also supports a separate *bundle installer* flow (CLI wizard + scripts). See the "Distribution / Installer" section.
+
+---
+
+## Distribution / Installer
+
+If you want to send someone a self-installable build (without requiring them to compile), you can create a "bundle" that includes:
+- the backend executable (`StoneGate`)
+- the built frontend static assets (`frontend/dist`)
+- a small runner + installer with multiple install modes
+
+Create a tarball on your dev machine:
+
+```bash
+./tools/installer/stonegate-bundle.sh
+```
+
+Then on the target machine:
+
+```bash
+tar -xzf stonegate-<version>.tar.gz
+cd stonegate
+./bin/install.sh --help
+```
+
+Guided setup (recommended):
+
+```bash
+./bin/stonegate-wizard
+```
+
+The installer can set defaults for the built UI (backend host/port, build-mode defaults) via `frontend/dist/stonegate-config.js`.
+
+Docker option (build+run inside containers) is available if you create the bundle with `--include-source`.
+
 ---
 
 ## Directory Structure

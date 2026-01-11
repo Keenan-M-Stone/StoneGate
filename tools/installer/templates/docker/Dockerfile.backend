@@ -1,0 +1,43 @@
+# Builds the StoneGate backend from source (expected under /context/source/backend)
+FROM ubuntu:24.04
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    build-essential \
+    cmake \
+    ninja-build \
+    pkg-config \
+    libboost-all-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /context
+
+# Copy minimal source tree
+COPY source/backend /context/backend
+COPY source/shared /context/shared
+
+# Configure & build
+RUN cmake -S /context/backend -B /context/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build /context/build -j
+
+# Runtime image
+FROM ubuntu:24.04
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libstdc++6 \
+    libgcc-s1 \
+   libboost-system-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=0 /context/build/StoneGate /app/backend/StoneGate
+COPY --from=0 /context/shared /app/shared
+
+ENV STONEGATE_GRAPH_PATH=/app/shared/protocol/DeviceGraph.json
+EXPOSE 8080
+
+CMD ["/app/backend/StoneGate", "--sim", "--port", "8080"]

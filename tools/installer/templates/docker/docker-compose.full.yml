@@ -1,0 +1,21 @@
+name: stonegate
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      - STONEGATE_GRAPH_PATH=/app/shared/protocol/DeviceGraph.json
+    command: ["/app/backend/StoneGate", "--sim", "--port", "8080"]
+
+  ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    depends_on:
+      - backend
+    ports:
+      - "${UI_PORT:-5173}:80"

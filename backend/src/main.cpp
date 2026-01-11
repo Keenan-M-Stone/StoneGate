@@ -27,7 +27,7 @@ static void print_usage(const char* prog) {
 }
 
 int main(int argc, char** argv) {
-    int port = 9001;
+    int port = 8080;
     // Accept either a numeric first argument (legacy) or explicit flags
     if (argc > 1) {
         std::string first(argv[1]);

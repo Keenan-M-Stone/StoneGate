@@ -8,14 +8,33 @@ const WS_URL_KEY = 'stonegate.ws_url'
 const BUILD_MODE_KEY = 'stonegate.build_mode'
 const AUTO_BACKEND_SCHEM_KEY = 'stonegate.auto_backend_schematic'
 
+type StoneGateRuntimeConfig = {
+  ws_url?: string
+  build_mode?: boolean
+  auto_backend_schematic?: boolean
+}
+
+function getRuntimeConfig(): StoneGateRuntimeConfig {
+  try {
+    const cfg = (globalThis as any).__STONEGATE_CONFIG__
+    if (cfg && typeof cfg === 'object') return cfg as StoneGateRuntimeConfig
+  } catch {}
+  return {}
+}
+
 function readFlag(key: string, fallback = false): boolean {
   try {
     const v = localStorage.getItem(key)
     if (v === null) return fallback
     return v === 'true'
   } catch {
-    return fallback
+    // fallthrough
   }
+
+  const cfg = getRuntimeConfig()
+  if (key === BUILD_MODE_KEY && typeof cfg.build_mode === 'boolean') return cfg.build_mode
+  if (key === AUTO_BACKEND_SCHEM_KEY && typeof cfg.auto_backend_schematic === 'boolean') return cfg.auto_backend_schematic
+  return fallback
 }
 
 function getWsUrl() {
@@ -23,10 +42,16 @@ function getWsUrl() {
     const v = localStorage.getItem(WS_URL_KEY)
     if (v && typeof v === 'string') return v
   } catch {}
+
+  const cfg = getRuntimeConfig()
+  if (typeof cfg.ws_url === 'string' && cfg.ws_url) return cfg.ws_url
+
   return ((import.meta.env.VITE_BACKEND_WS_URL as string) ?? 'ws://localhost:8080/status') as string
 }
 
 function getDefaultWsUrl() {
+  const cfg = getRuntimeConfig()
+  if (typeof cfg.ws_url === 'string' && cfg.ws_url) return cfg.ws_url
   return ((import.meta.env.VITE_BACKEND_WS_URL as string) ?? 'ws://localhost:8080/status') as string
 }
 
