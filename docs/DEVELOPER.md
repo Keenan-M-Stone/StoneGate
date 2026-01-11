@@ -61,6 +61,39 @@ Developer notes can also be found in the main `README.md` doc for the repository
 - control: client -> server, actions & macro orchestration
 - descriptor: server -> client, device descriptors (sent at connect)
 
+## Instance tracking & safe shutdown (CLI)
+
+For quick cleanup during development (especially when you have multiple simulator backends or Vite dev servers running), the frontend includes a small command-line helper that:
+
+- Lists StoneGate backend/frontend instances currently listening on ports
+- Labels them as **safe to shutdown** (simulators + frontend dev/preview) vs **potentially unsafe** (non-sim backends)
+- Can terminate safe instances in bulk, while requiring an explicit `--force` for anything that might be hardware-backed
+
+From `frontend/`:
+
+```bash
+pnpm stonegate:ps
+pnpm stonegate:ps:json
+
+# Watch backend activity (polls devices.poll periodically)
+pnpm stonegate:watch
+pnpm stonegate:watch -- --interval 0.5
+pnpm stonegate:watch:once
+
+# Stop only safe instances (frontend dev servers + backends launched with --sim)
+pnpm stonegate:kill-safe
+
+# Stop a specific PID (unsafe instances require --force)
+pnpm stonegate:kill --pid 12345
+node scripts/stonegate-admin.mjs kill --pid 12345 --force
+```
+
+Safety notes:
+
+- Any StoneGate backend not launched with `--sim` is treated as **real/unknown** and will not be killed unless you pass `--force`.
+- The tool uses the system process table + listening sockets to discover instances. When available, it also queries backend RPCs via `tools/build/toolbox_ws_client` to enrich listing details.
+- `watch` surfaces any `job_id` / `recording_id` fields it finds inside polled measurements (many devices won’t include these).
+
 ## Local installation (Backend)
 
 - Requirements:

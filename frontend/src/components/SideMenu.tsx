@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMacro }: any){
+export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMacro, onOpenInstanceManager }: any){
   const [collapsed, setCollapsed] = React.useState(false)
   return (
     <div style={{ position: 'fixed', left: 12, top: 80, width: collapsed?36:220, background: '#021018', color: '#cfe', padding: 8, borderRadius: 8, zIndex: 120 }}>
@@ -23,6 +23,12 @@ export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMa
               <input type='checkbox' checked={showMacro} onChange={e=>setShowMacro(e.target.checked)} />
               <span>Show Macros</span>
             </label>
+          </div>
+
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+            <button onClick={onOpenInstanceManager} style={{ width: '100%', padding: '0.4em 0.6em' }}>
+              Instance Manager…
+            </button>
           </div>
         </div>
       )}

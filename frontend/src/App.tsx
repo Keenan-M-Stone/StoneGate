@@ -7,6 +7,7 @@ import ConnectionPanel from './components/ConnectionPanel'
 import MacroEditor from './components/MacroEditor'
 import SideMenu from './components/SideMenu'
 import ComponentDialog from './components/SchematicCanvas/dialogs/ComponentDialog'
+import InstanceManagerDialog from './components/InstanceManagerDialog'
 
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [buildMode, setBuildMode] = React.useState(false)
   const [showMacro, setShowMacro] = React.useState(false)
+  const [showInstanceManager, setShowInstanceManager] = React.useState(false)
 
   const onSelectNode = (id?: string|null) => { setSelectedNode(id??null) }
   const onOpenDialog = (id:string) => { setSelectedNode(id); setDialogOpen(true) }
@@ -40,8 +42,15 @@ export default function App() {
           </div>
       </header>
           <SchematicCanvas buildMode={buildMode} onSelectNode={onSelectNode} onOpenDialog={onOpenDialog} />
-          <SideMenu buildMode={buildMode} setBuildMode={setBuildMode} showMacro={showMacro} setShowMacro={setShowMacro} />
+          <SideMenu
+            buildMode={buildMode}
+            setBuildMode={setBuildMode}
+            showMacro={showMacro}
+            setShowMacro={setShowMacro}
+            onOpenInstanceManager={() => setShowInstanceManager(true)}
+          />
           {showMacro && <MacroEditor />}
+          <InstanceManagerDialog open={showInstanceManager} onClose={() => setShowInstanceManager(false)} />
         {dialogOpen && selectedNode && (
           <div style={{ position: 'relative', left: '50%', top: '10%', transform: 'translateX(-50%)', zIndex: 80 }}>
             <ComponentDialog id={selectedNode} status={devices[selectedNode]} schema={undefined} onClose={() => setDialogOpen(false)} />

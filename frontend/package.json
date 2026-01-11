@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "stonegate:ps": "node scripts/stonegate-admin.mjs list",
+    "stonegate:ps:json": "node scripts/stonegate-admin.mjs list --json",
+    "stonegate:watch": "node scripts/stonegate-admin.mjs watch",
+    "stonegate:watch:once": "node scripts/stonegate-admin.mjs watch --once",
+    "stonegate:kill-safe": "node scripts/stonegate-admin.mjs kill --safe",
+    "stonegate:kill": "node scripts/stonegate-admin.mjs kill"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
