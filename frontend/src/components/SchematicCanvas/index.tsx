@@ -11,20 +11,24 @@ import { UiErrors } from '../../utils/errorCatalog'
 
 export default function SchematicCanvas({ buildMode=false, onSelectNode, onOpenDialog }:{ buildMode?:boolean, onSelectNode?: (id?:string|null)=>void, onOpenDialog?: (id:string)=>void }) {
   const devices = useDeviceStore(s => s.devices)
+  const schematicOverride = useDeviceStore(s => s.schematicOverride)
 
   const [selected, setSelected] = React.useState<string | null>(null)
   const [nodeSizes, setNodeSizes] = React.useState<Record<string,{width:number,height:number}>>({})
 
-  const nodes = deviceGraph.nodes || []
-  const edges = deviceGraph.edges || []
+  const activeGraph: any = schematicOverride?.graph ?? deviceGraph
+  const activeSchema: any = schematicOverride?.schema ?? compSchema
+
+  const nodes = activeGraph?.nodes || []
+  const edges = activeGraph?.edges || []
 
   const handleSelect = (id:string|null) => { setSelected(id); if (onSelectNode) onSelectNode(id); }
 
   // compute canvas size from graph extents so we can make it scrollable
   const padding = 80
   const spacing = 1.25 // scale spacing to space elements out
-  const xs = nodes.map((n:any)=>n.x)
-  const ys = nodes.map((n:any)=>n.y)
+  const xs = nodes.length ? nodes.map((n:any)=>n.x) : [0]
+  const ys = nodes.length ? nodes.map((n:any)=>n.y) : [0]
   const minX = Math.min(...xs)
   const minY = Math.min(...ys)
   const maxX = Math.max(...xs)
@@ -138,7 +142,7 @@ return (
                   label={n.label}
                   type={n.type}
                   status={status}
-                  schema={(compSchema as any)[n.type]}
+                  schema={(activeSchema as any)?.[n.type]}
                   buildMode={buildMode}
                   width={size.width}
                   height={size.height}

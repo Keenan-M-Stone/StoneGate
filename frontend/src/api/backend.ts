@@ -1,6 +1,7 @@
 import type { StatusUpdateMessage } from '../../../shared/protocol/MessageTypes'
 import { useDeviceStore } from '../state/store'
 import History from '../state/history'
+import { checkBackendCompatibility } from './compat'
 
 const WS_URL_KEY = 'stonegate.ws_url'
 
@@ -18,6 +19,9 @@ class BackendClient {
   messagesSent = 0
   messagesReceived = 0
   endpoint = getWsUrl()
+
+  lastBackendInfo: any = null
+  lastCompat: { ok: boolean; reason: string } | null = null
 
   private pendingRpc = new Map<
     string,
@@ -39,6 +43,17 @@ class BackendClient {
     this.ws.onopen = () => {
       this.connected = true
       console.log('WS connected')
+
+      // Probe backend.info to check protocol compatibility.
+      this.rpc('backend.info', {}, 4000)
+        .then(info => {
+          this.lastBackendInfo = info
+          this.lastCompat = checkBackendCompatibility(info?.protocol_version)
+        })
+        .catch(e => {
+          this.lastBackendInfo = null
+          this.lastCompat = { ok: false, reason: String((e as any)?.message ?? e) }
+        })
     }
     this.ws.onmessage = ev => {
       this.messagesReceived += 1
@@ -133,6 +148,9 @@ class BackendClient {
       this.ws = null
       console.log('WS disconnected')
 
+      this.lastBackendInfo = null
+      this.lastCompat = null
+
       // Fail any pending RPCs.
       for (const [, p] of this.pendingRpc) {
         clearTimeout(p.timeoutId)
@@ -201,7 +219,14 @@ class BackendClient {
   }
 
   stats() {
-    return { endpoint: this.endpoint, connected: this.connected, sent: this.messagesSent, received: this.messagesReceived }
+    return {
+      endpoint: this.endpoint,
+      connected: this.connected,
+      sent: this.messagesSent,
+      received: this.messagesReceived,
+      backendInfo: this.lastBackendInfo,
+      compatibility: this.lastCompat,
+    }
   }
 }
 

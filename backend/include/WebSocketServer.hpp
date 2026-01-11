@@ -12,7 +12,7 @@ namespace stonegate { class Recorder; }
 
 class WebSocketServer {
 public:
-    WebSocketServer(int port, DeviceRegistry& registry);
+    WebSocketServer(int port, DeviceRegistry& registry, bool sim_mode = false, std::string device_graph_path = "");
     ~WebSocketServer();
 
     void start();
@@ -27,6 +27,8 @@ private:
     void broadcast_measurements_loop();
 
     int port;
+    bool sim_mode_ = false;
+    std::string device_graph_path_;
     std::atomic<bool> running;
     std::thread event_thread;
     std::thread broadcast_thread;

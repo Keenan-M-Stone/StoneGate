@@ -13,6 +13,8 @@
 #include <iostream>
 #include <cstdio>
 #include <unistd.h>
+#include <filesystem>
+#include <cstdlib>
 
 static void print_usage(const char* prog) {
     std::cout << "Usage: " << prog << " [options]\n"
@@ -20,6 +22,7 @@ static void print_usage(const char* prog) {
               << "  -h, --help        Show this help message and exit\n"
               << "  -s, --sim         Run in simulator mode (registers simulated devices)\n"
               << "  -p, --port PORT   Set listening TCP port (default 9001)\n"
+              << "  --graph PATH      DeviceGraph.json path (sim mode; optional)\n"
               << std::flush;
 }
 
@@ -41,6 +44,7 @@ int main(int argc, char** argv) {
     DeviceRegistry registry;
 
     bool sim_mode = false;
+    std::string device_graph_path;
     for (int i = 1; i < argc; ++i) {
         std::string a(argv[i]);
         if (a == "-h" || a == "--help") {
@@ -49,6 +53,9 @@ int main(int argc, char** argv) {
         }
         // Default sim port 8080.
         if (a == "--sim" || a == "-s"){ sim_mode = true; port=8080; }
+        if (a == "--graph" && i + 1 < argc) {
+            device_graph_path = argv[i + 1];
+        }
         if ((a == "--port" || a == "-p") && i+1 < argc) {
             try { port = std::stoi(argv[i+1]); } catch(...) {}
         }
@@ -57,9 +64,23 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (sim_mode && device_graph_path.empty()) {
+        // Prefer explicit env var, then a couple common repo-relative probes.
+        if (const char* envp = std::getenv("STONEGATE_GRAPH_PATH")) {
+            device_graph_path = envp;
+        } else {
+            const auto cwd = std::filesystem::current_path();
+            const auto probe1 = (cwd / "shared" / "protocol" / "DeviceGraph.json").string();
+            const auto probe2 = (cwd / ".." / "shared" / "protocol" / "DeviceGraph.json").string();
+            if (std::filesystem::exists(probe1)) device_graph_path = probe1;
+            else if (std::filesystem::exists(probe2)) device_graph_path = probe2;
+            else device_graph_path = "/home/lemma137/dev/StoneGate/shared/protocol/DeviceGraph.json";
+        }
+    }
+
     if (sim_mode) {
         // Load simulator graph so device IDs match frontend `DeviceGraph.json`
-        std::string graph_path = "/home/lemma137/dev/StoneGate/shared/protocol/DeviceGraph.json";
+        std::string graph_path = device_graph_path;
         static Simulator* global_sim = nullptr;
         if (!global_sim) global_sim = new Simulator(/*seed=*/0);
         if (!global_sim->load_from_graph(graph_path, registry)) {
@@ -84,7 +105,7 @@ int main(int argc, char** argv) {
         registry.register_device(std::make_shared<QECModuleDevice>("qec1"));
     }
 
-    WebSocketServer server(port, registry);
+    WebSocketServer server(port, registry, sim_mode, device_graph_path);
     server.start();
 
     std::cout << "Quantum backend running on port " << port << "..." << std::endl;

@@ -20,18 +20,27 @@ export type DeviceDescriptor = {
   metrics?: Record<string, ObservableMeta>
 }
 
+export type SchematicOverride = {
+  graph: any
+  schema: any
+  meta?: any
+}
+
 type DeviceEntry = DeviceStatus & { label?: string }
 
 interface DeviceState {
   devices: Record<string, DeviceEntry>
   descriptors: Record<string, DeviceDescriptor>
+  schematicOverride: SchematicOverride | null
   upsertDevice: (d: DeviceStatus) => void
   upsertDescriptor: (d: DeviceDescriptor) => void
+  setSchematicOverride: (o: SchematicOverride | null) => void
 }
 
 export const useDeviceStore = create<DeviceState>((set, _get) => ({
   devices: {},
   descriptors: {},
+  schematicOverride: null,
   upsertDevice: (d) =>
     set(state => ({
       devices: {
@@ -46,6 +55,7 @@ export const useDeviceStore = create<DeviceState>((set, _get) => ({
         [d.id]: d,
       },
     })),
+  setSchematicOverride: (o) => set({ schematicOverride: o }),
 }))
 
 // helper for non-hook updates

@@ -7,6 +7,8 @@
 #include "core/ErrorCatalog.hpp"
 #include <iostream>
 #include <chrono>
+#include <fstream>
+#include <filesystem>
 // Boost.Beast / Asio for WebSocket
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
@@ -31,8 +33,54 @@ static std::string sg_random_id() {
     return out;
 }
 
-WebSocketServer::WebSocketServer(int p, DeviceRegistry& reg)
-: port(p), running(false), registry(reg) {}
+static std::string sg_read_file(const std::string& path) {
+    std::ifstream f(path, std::ios::in | std::ios::binary);
+    if (!f) return {};
+    std::string s;
+    f.seekg(0, std::ios::end);
+    std::streampos n = f.tellg();
+    if (n > 0) s.resize((size_t)n);
+    f.seekg(0, std::ios::beg);
+    if (!s.empty()) f.read(&s[0], s.size());
+    return s;
+}
+
+static std::string sg_fnv1a64_hex(const std::string& bytes) {
+    uint64_t h = 1469598103934665603ull;
+    for (unsigned char c : bytes) {
+        h ^= (uint64_t)c;
+        h *= 1099511628211ull;
+    }
+    static const char* hex = "0123456789abcdef";
+    std::string out;
+    out.resize(16);
+    for (int i = 0; i < 16; ++i) {
+        out[15 - i] = hex[(h >> (i * 4)) & 0xF];
+    }
+    return out;
+}
+
+static std::string sg_protocol_version() {
+    // Update when making breaking protocol changes.
+    return "1.0.0";
+}
+
+static nlohmann::json sg_capabilities() {
+    return nlohmann::json::array({
+        "devices.list",
+        "devices.poll",
+        "backend.info",
+        "graph.get",
+        "device.action",
+        "record.start",
+        "record.stop",
+        "qec.decode",
+        "qec.benchmark"
+    });
+}
+
+WebSocketServer::WebSocketServer(int p, DeviceRegistry& reg, bool sim_mode, std::string device_graph_path)
+: port(p), sim_mode_(sim_mode), device_graph_path_(std::move(device_graph_path)), running(false), registry(reg) {}
 
 // Implementation details hidden behind PIMPL
 struct WebSocketServer::Impl {
@@ -318,10 +366,92 @@ void WebSocketServer::handle_message(const nlohmann::json& msg, const std::funct
                 return;
             }
             if (method == "backend.info") {
+                std::string graph_hash;
+                std::string schema_hash;
+                if (!device_graph_path_.empty() && std::filesystem::exists(device_graph_path_)) {
+                    const auto bytes = sg_read_file(device_graph_path_);
+                    if (!bytes.empty()) graph_hash = sg_fnv1a64_hex(bytes);
+                    std::filesystem::path p(device_graph_path_);
+                    auto schema_path = (p.parent_path() / "ComponentSchema.json").string();
+                    if (std::filesystem::exists(schema_path)) {
+                        const auto sb = sg_read_file(schema_path);
+                        if (!sb.empty()) schema_hash = sg_fnv1a64_hex(sb);
+                    }
+                }
                 rpc_ok(id, {
                     {"port", port},
                     {"git_commit", stonegate::buildinfo::git_commit()},
-                    {"build_time", stonegate::buildinfo::build_time_utc_approx()}
+                    {"build_time", stonegate::buildinfo::build_time_utc_approx()},
+                    {"protocol_version", sg_protocol_version()},
+                    {"capabilities", sg_capabilities()},
+                    {"mode", sim_mode_ ? "sim" : "real/unknown"},
+                    {"device_graph_path", device_graph_path_},
+                    {"graph_hash", graph_hash},
+                    {"schema_hash", schema_hash}
+                });
+                return;
+            }
+
+            if (method == "graph.get") {
+                const bool include_graph = params.value("include_graph", true);
+                const bool include_schema = params.value("include_schema", true);
+
+                if (device_graph_path_.empty() || !std::filesystem::exists(device_graph_path_)) {
+                    rpc_ok(id, {
+                        {"available", false},
+                        {"error", "device_graph_path not configured"},
+                        {"device_graph_path", device_graph_path_},
+                        {"mode", sim_mode_ ? "sim" : "real/unknown"}
+                    });
+                    return;
+                }
+
+                const auto bytes = sg_read_file(device_graph_path_);
+                if (bytes.empty()) {
+                    rpc_ok(id, {
+                        {"available", false},
+                        {"error", "failed to read device graph"},
+                        {"device_graph_path", device_graph_path_}
+                    });
+                    return;
+                }
+
+                nlohmann::json graph;
+                try {
+                    graph = nlohmann::json::parse(bytes);
+                } catch (...) {
+                    rpc_ok(id, {
+                        {"available", false},
+                        {"error", "device graph is not valid JSON"},
+                        {"device_graph_path", device_graph_path_}
+                    });
+                    return;
+                }
+
+                std::filesystem::path p(device_graph_path_);
+                auto schema_path = (p.parent_path() / "ComponentSchema.json").string();
+                nlohmann::json schema = nlohmann::json::object();
+                std::string schema_bytes;
+                if (include_schema && std::filesystem::exists(schema_path)) {
+                    schema_bytes = sg_read_file(schema_path);
+                    if (!schema_bytes.empty()) {
+                        try {
+                            schema = nlohmann::json::parse(schema_bytes);
+                        } catch (...) {
+                            schema = nlohmann::json::object();
+                        }
+                    }
+                }
+
+                rpc_ok(id, {
+                    {"available", true},
+                    {"protocol_version", sg_protocol_version()},
+                    {"mode", sim_mode_ ? "sim" : "real/unknown"},
+                    {"device_graph_path", device_graph_path_},
+                    {"graph_hash", sg_fnv1a64_hex(bytes)},
+                    {"schema_hash", schema_bytes.empty() ? std::string{} : sg_fnv1a64_hex(schema_bytes)},
+                    {"graph", include_graph ? graph : nlohmann::json()},
+                    {"schema", include_schema ? schema : nlohmann::json()}
                 });
                 return;
             }
