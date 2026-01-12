@@ -1,13 +1,23 @@
 export default function AppHelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
 
+  // Repository URL could be configured via environment variable if needed
   const repoUrl = 'https://github.com/Keenan-M-Stone/StoneGate'
   const docsBaseUrl = `${repoUrl}/blob/main/docs`
   const errorsJsonUrl = `${repoUrl}/blob/main/shared/config/errors.json`
 
   const handleCheckForUpdates = () => {
     const latestReleaseUrl = `${repoUrl}/releases/latest`
-    window.open(latestReleaseUrl, '_blank', 'noopener,noreferrer')
+    try {
+      const newWindow = window.open(latestReleaseUrl, '_blank', 'noopener,noreferrer')
+      if (!newWindow) {
+        // Fallback if popup is blocked
+        window.location.href = latestReleaseUrl
+      }
+    } catch (error) {
+      // Final fallback
+      window.location.href = latestReleaseUrl
+    }
   }
 
   return (
