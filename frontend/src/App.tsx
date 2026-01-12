@@ -11,7 +11,6 @@ import InstanceManagerDialog from './components/InstanceManagerDialog'
 import SnapshotDialog from './components/SnapshotDialog'
 import SchematicsDialog from './components/SchematicsDialog'
 import DiagnosticsWindow from './components/DiagnosticsWindow'
-import InstallationWizardDialog from './components/InstallationWizardDialog'
 import AppHelpDialog from './components/AppHelpDialog'
 import InspectDock from './components/InspectDock'
 
@@ -36,7 +35,6 @@ export default function App() {
   const [showSnapshots, setShowSnapshots] = React.useState(false)
   const [showSchematics, setShowSchematics] = React.useState(false)
   const [showDiagnostics, setShowDiagnostics] = React.useState(false)
-  const [showInstallWizard, setShowInstallWizard] = React.useState(false)
   const [showHelp, setShowHelp] = React.useState(false)
 
   React.useEffect(() => {
@@ -78,7 +76,6 @@ export default function App() {
             showMacro={showMacro}
             setShowMacro={setShowMacro}
             onOpenInstanceManager={() => setShowInstanceManager(true)}
-            onOpenInstallWizard={() => setShowInstallWizard(true)}
             onOpenSnapshots={() => setShowSnapshots(true)}
             onOpenSchematics={() => setShowSchematics(true)}
             onOpenDiagnostics={() => setShowDiagnostics(true)}
@@ -89,7 +86,6 @@ export default function App() {
           <InstanceManagerDialog open={showInstanceManager} onClose={() => setShowInstanceManager(false)} />
           <SnapshotDialog open={showSnapshots} onClose={() => setShowSnapshots(false)} />
           <SchematicsDialog open={showSchematics} onClose={() => setShowSchematics(false)} />
-          <InstallationWizardDialog open={showInstallWizard} onClose={() => setShowInstallWizard(false)} />
           <AppHelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
         <footer style={{ marginTop: 12 }}>
         <small>Nodes show "NO SIGNAL" until backend sends updates.</small>

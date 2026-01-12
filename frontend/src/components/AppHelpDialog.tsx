@@ -1,6 +1,15 @@
 export default function AppHelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null
 
+  const repoUrl = 'https://github.com/Keenan-M-Stone/StoneGate'
+  const docsBaseUrl = `${repoUrl}/blob/main/docs`
+  const errorsJsonUrl = `${repoUrl}/blob/main/shared/config/errors.json`
+
+  const handleCheckForUpdates = () => {
+    const latestReleaseUrl = `${repoUrl}/releases/latest`
+    window.open(latestReleaseUrl, '_blank', 'noopener,noreferrer')
+  }
+
   return (
     <div
       style={{
@@ -58,6 +67,58 @@ export default function AppHelpDialog({ open, onClose }: { open: boolean; onClos
               <strong>Instance Manager</strong> is dev-only and only available when running <code>pnpm dev</code>.
             </li>
           </ul>
+        </div>
+
+        <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 10 }}>
+          <h4 style={{ margin: '0 0 8px 0' }}>Resources</h4>
+          <ul style={{ margin: 0, paddingLeft: 18, opacity: 0.9, fontSize: 13, lineHeight: 1.5 }}>
+            <li>
+              <a href={`${docsBaseUrl}/DEVELOPER.md`} target="_blank" rel="noopener noreferrer" style={{ color: '#6ab7ff', textDecoration: 'none' }}>
+                Developer Guide
+              </a> — WebSocket message shapes, quickstart instructions
+            </li>
+            <li>
+              <a href={`${docsBaseUrl}/Software_Specifications.md`} target="_blank" rel="noopener noreferrer" style={{ color: '#6ab7ff', textDecoration: 'none' }}>
+                Software Specifications
+              </a> — Architecture and design details
+            </li>
+            <li>
+              <a href={`${docsBaseUrl}/Tooling.md`} target="_blank" rel="noopener noreferrer" style={{ color: '#6ab7ff', textDecoration: 'none' }}>
+                Tooling Guide
+              </a> — Build tools and development workflows
+            </li>
+            <li>
+              <a href={errorsJsonUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#6ab7ff', textDecoration: 'none' }}>
+                Error Catalog
+              </a> — Numbered error codes with cause and action statements
+            </li>
+            <li>
+              <a href={`${repoUrl}/blob/main/README.md`} target="_blank" rel="noopener noreferrer" style={{ color: '#6ab7ff', textDecoration: 'none' }}>
+                Main README
+              </a> — Overview, setup, and usage instructions
+            </li>
+          </ul>
+        </div>
+
+        <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)', paddingTop: 10 }}>
+          <h4 style={{ margin: '0 0 8px 0' }}>Updates</h4>
+          <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 8 }}>
+            Check for the latest version and release notes.
+          </div>
+          <button
+            onClick={handleCheckForUpdates}
+            style={{
+              padding: '0.5em 1em',
+              backgroundColor: '#1a5490',
+              color: '#fff',
+              border: '1px solid #2a7cbf',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            Check for Updates
+          </button>
         </div>
       </div>
     </div>
