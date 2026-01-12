@@ -63,6 +63,12 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+.schematic-focus-ring:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(90, 170, 255, 0.95),
+    0 0 0 6px rgba(90, 170, 255, 0.18);
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

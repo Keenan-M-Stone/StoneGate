@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMacro, onOpenInstanceManager, onOpenSnapshots, onOpenSchematics, onOpenDiagnostics, onOpenHelp }: any){
+export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMacro, showMiniMap, setShowMiniMap, onOpenInstanceManager, onOpenSnapshots, onOpenSchematics, onOpenDiagnostics, onOpenHelp }: any){
   const [collapsed, setCollapsed] = React.useState(false)
   const liveTransformsUrl = `${import.meta.env.BASE_URL}tools/live-transform-demo/index.html`
   const menuItemStyle: React.CSSProperties = {
@@ -20,12 +20,18 @@ export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMa
   }
 
   return (
-    <div style={{ position: 'fixed', left: 12, top: 80, width: collapsed?36:220, background: '#021018', color: '#cfe', padding: 8, borderRadius: 8, zIndex: 120 }}>
+    <div style={{ position: 'fixed', right: 12, top: 80, width: collapsed?36:220, background: '#021018', color: '#cfe', padding: 8, borderRadius: 8, zIndex: 120 }}>
+      <button
+        onClick={()=>setCollapsed(c=>!c)}
+        title={collapsed ? 'Expand Tools' : 'Collapse Tools'}
+        aria-label={collapsed ? 'Expand Tools' : 'Collapse Tools'}
+        style={{ position: 'absolute', right: 6, top: 6, width: 28 }}
+      >
+        {collapsed ? '<' : '>'}
+      </button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 14 }}>{collapsed? '': 'Tools'}</strong>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={()=>setCollapsed(c=>!c)} style={{ width: 28 }}>{collapsed? '>' : '<' }</button>
-        </div>
+        <div style={{ display: 'flex', gap: 6 }} />
       </div>
       {!collapsed && (
         <div style={{ marginTop: 8 }}>
@@ -39,6 +45,12 @@ export default function SideMenu({ buildMode, setBuildMode, showMacro, setShowMa
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type='checkbox' checked={showMacro} onChange={e=>setShowMacro(e.target.checked)} />
               <span>Show Macros</span>
+            </label>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type='checkbox' checked={!!showMiniMap} onChange={e=>setShowMiniMap?.(e.target.checked)} />
+              <span>Show Minimap</span>
             </label>
           </div>
 

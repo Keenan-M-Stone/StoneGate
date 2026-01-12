@@ -6,15 +6,26 @@ export interface PanZoomProps {
   contentHeight: number;
   enableMiniMap?: boolean;
   miniMapContent?: ReactNode;
+  overlay?: ReactNode;
+  contextMenuItems?: Array<{ label: string; onClick: () => void; disabled?: boolean }>;
+  onViewStateChange?: (s: { scale: number; offset: { x: number; y: number }; containerSize: { width: number; height: number } }) => void;
   buildMode?: boolean;
   style?: React.CSSProperties;
   className?: string;
+  containerProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
 /* ------------------------------------------------------------------
    Hook: usePanZoom
    ------------------------------------------------------------------ */
-export function usePanZoom(initialScale = 1, contentWidth?: number, contentHeight?: number) {
+export function usePanZoom(
+  initialScale = 1,
+  contentWidth?: number,
+  contentHeight?: number,
+  options?: {
+    contextMenuItems?: Array<{ label: string; onClick: () => void; disabled?: boolean }>;
+  }
+) {
   const [scale, setScale] = useState(initialScale);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -54,6 +65,14 @@ export function usePanZoom(initialScale = 1, contentWidth?: number, contentHeigh
      ----------------------------- */
   const onMouseDown = (e: MouseEvent) => {
     if (e.button !== 0 && e.button !== 1) return;
+
+    // Allow child UIs (nodes, controls, minimap) to opt out of starting a pan.
+    // Hold Alt to force panning even when starting inside a node/control.
+    if (e.button === 0 && !e.altKey) {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('[data-panzoom-no-pan="true"]')) return;
+    }
+
     dragging.current = true;
     lastPos.current = { x: e.clientX, y: e.clientY };
   };
@@ -107,6 +126,15 @@ export function usePanZoom(initialScale = 1, contentWidth?: number, contentHeigh
 
     addItem("🔍 Fit to screen", () => fitToScreen());
     addItem("🔁 Reset zoom", () => reset());
+
+    const extra = options?.contextMenuItems ?? [];
+    for (const item of extra) {
+      if (!item || !item.label) continue;
+      addItem(item.label, () => {
+        if (item.disabled) return;
+        item.onClick();
+      });
+    }
 
     document.body.appendChild(menu);
 
@@ -280,6 +308,7 @@ export function MiniMap({
 
   return (
     <div
+      data-panzoom-no-pan="true"
       style={{
         position: "fixed",
         bottom: 20,
@@ -349,11 +378,19 @@ export function PanZoomContainer({
   contentHeight,
   enableMiniMap = true,
   miniMapContent,
+  overlay,
+  contextMenuItems,
+  onViewStateChange,
   buildMode,
   style,
   className,
+  containerProps,
 }: PanZoomProps) {
-  const pz = usePanZoom(1, contentWidth, contentHeight);
+  const pz = usePanZoom(1, contentWidth, contentHeight, { contextMenuItems });
+
+  useEffect(() => {
+    onViewStateChange?.({ scale: pz.scale, offset: pz.offset, containerSize: pz.containerSize });
+  }, [pz.scale, pz.offset, pz.containerSize.width, pz.containerSize.height, onViewStateChange]);
 
   // Fit to full schematic by default, and re-fit when content grows (esp. in build mode)
   const lastContent = useRef<{ w: number; h: number } | null>(null);
@@ -380,8 +417,15 @@ export function PanZoomContainer({
     pz.setOffset({ x, y });
   };
 
+  const {
+    style: containerStyle,
+    className: containerClassName,
+    ...containerRest
+  } = containerProps ?? {};
+
   return (
     <div
+      {...containerRest}
       style={{
         width: "100%",
         height: "70vh",
@@ -389,9 +433,11 @@ export function PanZoomContainer({
         overflow: "hidden",
         borderRadius: 8,
         background: "#020615",
+        outline: "none",
+        ...(containerStyle as any),
         ...style,
       }}
-      className={className}
+      className={[className, containerClassName].filter(Boolean).join(" ")}
       ref={pz.ref}
     >
       {/* Transform wrapper */}
@@ -405,6 +451,12 @@ export function PanZoomContainer({
       >
         {children}
       </div>
+
+      {overlay ? (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 70 }}>
+          <div style={{ pointerEvents: 'auto' }}>{overlay}</div>
+        </div>
+      ) : null}
 
       {enableMiniMap && (
         <MiniMap

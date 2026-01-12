@@ -2,13 +2,16 @@ import { useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
 import type { DeviceStatus } from '../../../../shared/protocol/MessageTypes'
 
-export default function ComponentNode({ id: _id, label, type, status, schema: _schema, buildMode=false, width=200, height=140, onResize, spacing=1 }:{
+export default function ComponentNode({ id: _id, label, type, status, schema: _schema, buildMode=false, width=200, height=140, onResize, spacing=1, assignedFrom, primaryMeasurementKey }:{
 	id:string, label:string, type:string, status?:DeviceStatus | null, schema?:any,
-	buildMode?:boolean, width?:number, height?:number, onResize?: (w:number,h:number)=>void, spacing?:number
+	buildMode?:boolean, width?:number, height?:number, onResize?: (w:number,h:number)=>void, spacing?:number,
+	assignedFrom?: string,
+	primaryMeasurementKey?: string,
 }){
 	const stateColor = status ? (status.state==='nominal'? '#2ecc71' : status.state==='warning'? '#f1c40f' : status.state==='fault'? '#e74c3c' : '#95a5a6') : '#6b7280'
 
 	const measurements = status?.measurements ?? {}
+	const primaryKey = (typeof primaryMeasurementKey === 'string' && primaryMeasurementKey.trim()) ? primaryMeasurementKey.trim() : ''
 
 	// Resizing logic (drag handles) — convert screen delta to SVG units by dividing by spacing
 	const startRef = useRef<{x:number,y:number,w:number,h:number}|null>(null)
@@ -44,15 +47,24 @@ export default function ComponentNode({ id: _id, label, type, status, schema: _s
 			</div>
 
 			<div style={{ marginTop: 6 }}>
-				{status ? (
-					Object.keys(measurements).slice(0,2).map(k => {
+				{assignedFrom ? (
+					<div style={{ opacity: 0.75, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>src: {assignedFrom}</div>
+				) : null}
+
+				{primaryKey ? (
+					(() => {
+						const m = status ? (measurements as any)[primaryKey] : undefined
+						const val = (m && typeof m.value === 'number') ? m.value.toFixed(3) : '—'
+						const u = (m && typeof m.uncertainty === 'number') ? `±${m.uncertainty}` : ''
+						return <div key={primaryKey} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{primaryKey}: {val} {m?.unit ?? ''} {u}</div>
+					})()
+				) : (
+					status ? Object.keys(measurements).slice(0,2).map(k => {
 						const m = (measurements as any)[k]
 						const val = (m && typeof m.value === 'number') ? m.value.toFixed(3) : '—'
 						const u = (m && typeof m.uncertainty === 'number') ? `±${m.uncertainty}` : ''
 						return <div key={k} style={{ overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{k}: {val} {m.unit ?? ''} {u}</div>
-					})
-				) : (
-					<div style={{ color: '#94a3b8' }}>NO SIGNAL</div>
+					}) : null
 				)}
 			</div>
 

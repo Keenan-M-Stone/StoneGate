@@ -30,6 +30,14 @@ export default function App() {
   const [buildMode, setBuildMode] = React.useState<boolean>(() => {
     try { return (localStorage.getItem('stonegate.build_mode') || 'false') === 'true' } catch { return false }
   })
+  const [showMiniMap, setShowMiniMap] = React.useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem('stonegate.show_minimap')
+      return v === null ? true : v === 'true'
+    } catch {
+      return true
+    }
+  })
   const [showMacro, setShowMacro] = React.useState(false)
   const [showInstanceManager, setShowInstanceManager] = React.useState(false)
   const [showSnapshots, setShowSnapshots] = React.useState(false)
@@ -40,6 +48,10 @@ export default function App() {
   React.useEffect(() => {
     try { localStorage.setItem('stonegate.build_mode', buildMode ? 'true' : 'false') } catch {}
   }, [buildMode])
+
+  React.useEffect(() => {
+    try { localStorage.setItem('stonegate.show_minimap', showMiniMap ? 'true' : 'false') } catch {}
+  }, [showMiniMap])
 
   const onSelectNode = (_id?: string|null) => {}
   const onOpenDialog = (id:string) => {
@@ -53,11 +65,10 @@ export default function App() {
         <h2> Stone Gate: Quantum Control - Diagnostic Schematic </h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               {/* There's really no harm in just making the port selectable */}
-              <div> Backend status: <strong>{Backend.connected ? 'Connected' : 'Disconnected'}</strong></div>
                 <ConnectionPanel buildMode={buildMode} />
           </div>
       </header>
-          <SchematicCanvas buildMode={buildMode} onSelectNode={onSelectNode} onOpenDialog={onOpenDialog} />
+          <SchematicCanvas buildMode={buildMode} showMiniMap={showMiniMap} onSelectNode={onSelectNode} onOpenDialog={onOpenDialog} />
           <InspectDock
             openIds={openInspectIds}
             onClose={(id) => setOpenInspectIds(prev => prev.filter(x => x !== id))}
@@ -75,6 +86,8 @@ export default function App() {
             setBuildMode={setBuildMode}
             showMacro={showMacro}
             setShowMacro={setShowMacro}
+            showMiniMap={showMiniMap}
+            setShowMiniMap={setShowMiniMap}
             onOpenInstanceManager={() => setShowInstanceManager(true)}
             onOpenSnapshots={() => setShowSnapshots(true)}
             onOpenSchematics={() => setShowSchematics(true)}
@@ -87,9 +100,6 @@ export default function App() {
           <SnapshotDialog open={showSnapshots} onClose={() => setShowSnapshots(false)} />
           <SchematicsDialog open={showSchematics} onClose={() => setShowSchematics(false)} />
           <AppHelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
-        <footer style={{ marginTop: 12 }}>
-        <small>Nodes show "NO SIGNAL" until backend sends updates.</small>
-      </footer>
     </div>
   )
 }
