@@ -24,9 +24,18 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
+  min-height: 100vh;
+  display: block;
+  overflow-y: scroll;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+#root {
+  width: 100%;
   min-height: 100vh;
 }
 

@@ -4,6 +4,12 @@ import Backend from '../../../api/backend'
 import { useDeviceStore } from '../../../state/store'
 import { UiErrors } from '../../../utils/errorCatalog'
 import DeviceActionDialog from '../../DeviceActionDialog'
+import ExpandLessIcon from '@mui/icons-material/ExpandLess'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import PauseIcon from '@mui/icons-material/Pause'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 
 function calcStats(values: (number|null)[]){
   const nums = values.filter((v): v is number => typeof v === 'number')
@@ -35,12 +41,17 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
   const [metric, setMetric] = React.useState(defaultMetric)
   const [timeRange, setTimeRange] = React.useState<number>(() => { try { return parseInt(localStorage.getItem('cg.timeRange')||'30') } catch { return 30 } })
   const [refreshRate, setRefreshRate] = React.useState<number>(() => { try { return parseFloat(localStorage.getItem('cg.refreshRate')||'1') } catch { return 1 } })
-  const [paused, setPaused] = React.useState(false)
-  const [offsetMs, setOffsetMs] = React.useState(0)
   const [color, setColor] = React.useState<string>(() => localStorage.getItem('cg.color') || '#00ff88')
   const [grid, setGrid] = React.useState<boolean>(() => (localStorage.getItem('cg.grid')||'true')==='true')
   const [logX, setLogX] = React.useState<boolean>(false)
   const [logY, setLogY] = React.useState<boolean>(false)
+
+  const [expanded, setExpanded] = React.useState(false)
+  const [analysisPaused, setAnalysisPaused] = React.useState(false)
+  const [analysisEndTs, setAnalysisEndTs] = React.useState<number>(() => Date.now())
+  const [analysisSnapshot, setAnalysisSnapshot] = React.useState<ReturnType<typeof History.snapshot> | null>(null)
+  const [analysisTransform, setAnalysisTransform] = React.useState<'none'|'running_avg'|'fft'|'psd'>('none')
+  const [avgWindow, setAvgWindow] = React.useState<number>(12)
 
   React.useEffect(()=>{
     localStorage.setItem('cg.timeRange', String(timeRange))
@@ -59,12 +70,11 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
   // plot update interval
   const [, forceRerender] = React.useReducer((n:number)=>n+1, 0)
   React.useEffect(()=>{
-    if (paused) return
     const idt = setInterval(()=> forceRerender(), Math.max(100, 1000*Math.max(0.1, 1/refreshRate)))
     return ()=> clearInterval(idt)
-  },[paused, refreshRate])
+  },[refreshRate])
 
-  const series = History.getSeries(id, metric, timeRange, offsetMs)
+  const series = History.getSeries(id, metric, timeRange, 0)
 
   // build svg path
   const svgWidth = 560, svgHeight = 240, pad = 28
@@ -82,8 +92,160 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
 
   const stats = calcStats(series.map(s=> s.value ?? null))
 
-  const handleBack = ()=> setOffsetMs(o => Math.min(o + Math.round(1000/Math.max(0.1, refreshRate)), timeRange*1000))
-  const handleForward = ()=> setOffsetMs(o => Math.max(0, o - Math.round(1000/Math.max(0.1, refreshRate))))
+  const stepMs = Math.max(100, Math.round(1000/Math.max(0.1, refreshRate)))
+
+  const computeSeriesFromSamples = React.useCallback((samples: ReturnType<typeof History.snapshot>, endTs: number) => {
+    const startTs = endTs - timeRange * 1000
+    const out: { ts:number, value: number | null }[] = []
+    for (const s of samples){
+      if (s.ts < startTs) continue
+      if (s.ts > endTs) continue
+      out.push({ ts: s.ts, value: s.measurements[metric] ?? null })
+    }
+    return out
+  }, [metric, timeRange])
+
+  const analysisSeries = (() => {
+    if (analysisPaused && analysisSnapshot){
+      return computeSeriesFromSamples(analysisSnapshot, analysisEndTs)
+    }
+    // When not paused, use the live buffer (transform is allowed while running)
+    return History.getSeries(id, metric, timeRange, 0)
+  })()
+
+  const applyTransform = React.useCallback((src: { ts:number, value:number|null }[]) => {
+    const clean = src.filter((p): p is { ts:number, value:number } => typeof p.value === 'number')
+    if (analysisTransform === 'none'){
+      return { kind: 'time' as const, points: clean.map(p => ({ x: p.ts, y: p.value })) }
+    }
+    if (analysisTransform === 'running_avg'){
+      const w = Math.max(1, Math.min(500, Math.floor(avgWindow)))
+      const pts: { x:number, y:number }[] = []
+      let sum = 0
+      const q: number[] = []
+      for (const p of clean){
+        q.push(p.value)
+        sum += p.value
+        if (q.length > w) sum -= q.shift()!
+        pts.push({ x: p.ts, y: sum / q.length })
+      }
+      return { kind: 'time' as const, points: pts }
+    }
+
+    // FFT/PSD: compute from a decimated, approximately-uniform time series.
+    const maxN = 256
+    if (clean.length < 8) return { kind: 'freq' as const, points: [] as { x:number, y:number }[] }
+
+    const take = Math.min(maxN, clean.length)
+    const stride = Math.max(1, Math.floor(clean.length / take))
+    const windowed = clean.filter((_, i) => i % stride === 0).slice(-take)
+
+    const values = windowed.map(p => p.value)
+    const times = windowed.map(p => p.ts)
+    const diffs: number[] = []
+    for (let i=1;i<times.length;i++) diffs.push(times[i]-times[i-1])
+    const diffsSorted = diffs.slice().sort((a,b)=>a-b)
+    const dtMs = diffsSorted.length ? diffsSorted[Math.floor(diffsSorted.length/2)] : 0
+    const dt = dtMs / 1000
+    if (!(dt > 0)) return { kind: 'freq' as const, points: [] as { x:number, y:number }[] }
+
+    // Next power of two for basic efficiency.
+    let nfft = 1
+    while (nfft < values.length) nfft *= 2
+    nfft = Math.min(256, nfft)
+
+    const padded: number[] = new Array(nfft).fill(0)
+    for (let i=0;i<Math.min(values.length, nfft);i++) padded[i] = values[i]
+
+    const half = Math.floor(nfft/2)
+    const out: { x:number, y:number }[] = []
+    const twoPiOverN = 2 * Math.PI / nfft
+    for (let k=0; k<=half; k++){
+      let re = 0
+      let im = 0
+      for (let n=0; n<nfft; n++){
+        const ang = -twoPiOverN * k * n
+        const x = padded[n]
+        re += x * Math.cos(ang)
+        im += x * Math.sin(ang)
+      }
+      const mag = Math.sqrt(re*re + im*im) / nfft
+      const freq = k / (dt * nfft)
+      const y = analysisTransform === 'psd' ? (mag * mag) : mag
+      out.push({ x: freq, y })
+    }
+    return { kind: 'freq' as const, points: out }
+  }, [analysisTransform, avgWindow])
+
+  const analysisView = applyTransform(analysisSeries)
+
+  const analysisNav = (() => {
+    if (!analysisPaused || !analysisSnapshot || analysisSnapshot.length === 0) return null
+    const earliest = analysisSnapshot[0].ts
+    const last = analysisSnapshot[analysisSnapshot.length - 1].ts
+    const minEnd = earliest + timeRange * 1000
+    return {
+      earliest,
+      last,
+      minEnd,
+      canBack: analysisEndTs > minEnd,
+      canForward: analysisEndTs < last,
+    }
+  })()
+
+  const renderPlot = (points: { x:number, y:number }[], labelX: string) => {
+    const svgWidth = 560
+    const svgHeight = 240
+    const pad = 28
+
+    if (!points.length){
+      return (
+        <div style={{ height: svgHeight, display: 'grid', placeItems: 'center', color: '#7f9ab3' }}>
+          No data
+        </div>
+      )
+    }
+
+    const xs = points.map(p => p.x)
+    const ys = points.map(p => p.y)
+    const xmin = Math.min(...xs)
+    const xmax = Math.max(...xs)
+    const ymin0 = Math.min(...ys)
+    const ymax0 = Math.max(...ys)
+    const ymin = ymin0 === ymax0 ? ymin0 - 0.5 : ymin0
+    const ymax = ymin0 === ymax0 ? ymax0 + 0.5 : ymax0
+
+    const toX = (x:number) => {
+      if (xmax === xmin) return pad
+      return pad + ((x - xmin) / (xmax - xmin)) * (svgWidth - pad*2)
+    }
+    const toY = (y:number) => {
+      if (ymax === ymin) return pad
+      return pad + (1 - ((y - ymin) / (ymax - ymin))) * (svgHeight - pad*2)
+    }
+
+    const pts = points.map(p => ({ x: toX(p.x), y: toY(p.y) }))
+
+    return (
+      <div style={{ border: '1px solid #123', padding: 8, borderRadius: 6 }}>
+        <svg width={svgWidth} height={svgHeight}>
+          {grid && Array.from({length:5}).map((_,i)=> (
+            <line
+              key={i}
+              x1={pad}
+              x2={svgWidth-pad}
+              y1={pad + i*(svgHeight-pad*2)/4}
+              y2={pad + i*(svgHeight-pad*2)/4}
+              stroke='#0b2'
+              strokeOpacity={0.06}
+            />
+          ))}
+          <polyline fill='none' stroke={color} strokeWidth={2} points={pts.map(p=>`${p.x},${p.y}`).join(' ')} />
+          <text x={pad} y={svgHeight-6} fill="#6f8aa5" fontSize={10}>{labelX}</text>
+        </svg>
+      </div>
+    )
+  }
 
   const doZero = ()=>{
     if (onStageZero) return onStageZero()
@@ -118,10 +280,24 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
   }
 
   return (
-    <div style={{ maxWidth: 720, maxHeight: '80vh', overflow: 'auto', background: '#071827', color: '#e6eef8', padding: 12, borderRadius: 8 }}>
+    <div
+      style={{
+        maxWidth: expanded ? 1280 : 720,
+        minWidth: expanded ? 1180 : undefined,
+        height: '100%',
+        overflow: 'auto',
+        background: '#071827',
+        color: '#e6eef8',
+        padding: 12,
+        borderRadius: 8,
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ margin: 0 }}>{id}</h3>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={()=>setExpanded(e=>!e)} title={expanded ? 'Collapse' : 'Expand'}>
+            {expanded ? <ExpandLessIcon fontSize='small' /> : <ExpandMoreIcon fontSize='small' />}
+          </button>
           <button onClick={onClose}>Close</button>
         </div>
       </div>
@@ -145,17 +321,121 @@ export default function ComponentDialog({ id, status, schema: _schema, onClose, 
               <button onClick={()=>setTab('settings')}>Plot Options</button>
             </div>
 
-            <div style={{ marginTop: 8, border: '1px solid #123', padding: 8, borderRadius: 6 }}>
-              <svg width={svgWidth} height={svgHeight}>
-                {grid && Array.from({length:5}).map((_,i)=> <line key={i} x1={pad} x2={svgWidth-pad} y1={pad + i*(svgHeight-pad*2)/4} y2={pad + i*(svgHeight-pad*2)/4} stroke='#0b2' strokeOpacity={0.06} />)}
-                <polyline fill='none' stroke={color} strokeWidth={2} points={pts.filter(p=>!isNaN(p.y)).map(p=>`${Math.max(p.x,0)},${p.y}`).join(' ')} />
-              </svg>
+            <div style={{ marginTop: 8 }}>
+              {!expanded ? (
+                // Live plot only
+                <div style={{ border: '1px solid #123', padding: 8, borderRadius: 6 }}>
+                  <svg width={svgWidth} height={svgHeight}>
+                    {grid && Array.from({length:5}).map((_,i)=> <line key={i} x1={pad} x2={svgWidth-pad} y1={pad + i*(svgHeight-pad*2)/4} y2={pad + i*(svgHeight-pad*2)/4} stroke='#0b2' strokeOpacity={0.06} />)}
+                    <polyline fill='none' stroke={color} strokeWidth={2} points={pts.filter(p=>!isNaN(p.y)).map(p=>`${Math.max(p.x,0)},${p.y}`).join(' ')} />
+                  </svg>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'start' }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: '#9bb3c7', marginBottom: 6 }}>Live</div>
+                    <div style={{ border: '1px solid #123', padding: 8, borderRadius: 6 }}>
+                      <svg width={svgWidth} height={svgHeight}>
+                        {grid && Array.from({length:5}).map((_,i)=> <line key={i} x1={pad} x2={svgWidth-pad} y1={pad + i*(svgHeight-pad*2)/4} y2={pad + i*(svgHeight-pad*2)/4} stroke='#0b2' strokeOpacity={0.06} />)}
+                        <polyline fill='none' stroke={color} strokeWidth={2} points={pts.filter(p=>!isNaN(p.y)).map(p=>`${Math.max(p.x,0)},${p.y}`).join(' ')} />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, color: '#9bb3c7' }}>Analysis {analysisPaused ? '(paused snapshot)' : '(live)'}</div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <select value={analysisTransform} onChange={e=>setAnalysisTransform(e.target.value as any)}>
+                          <option value='none'>None</option>
+                          <option value='running_avg'>Running average</option>
+                          <option value='fft'>Fourier (magnitude)</option>
+                          <option value='psd'>Power spectral density</option>
+                        </select>
+                        {analysisTransform === 'running_avg' && (
+                          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, color: '#9bb3c7' }}>N</span>
+                            <input type='number' value={avgWindow} onChange={e=>setAvgWindow(parseInt(e.target.value||'12'))} style={{ width: 72 }} />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {renderPlot(
+                      analysisView.points,
+                      analysisView.kind === 'freq' ? 'Frequency (Hz)' : 'Time'
+                    )}
+
+                    <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <button
+                        onClick={() => {
+                          setAnalysisPaused(p => {
+                            const next = !p
+                            if (next){
+                              const snap = History.snapshot(id)
+                              setAnalysisSnapshot(snap)
+                              const lastTs = snap.length ? snap[snap.length-1].ts : Date.now()
+                              setAnalysisEndTs(lastTs)
+                            } else {
+                              setAnalysisSnapshot(null)
+                              setAnalysisEndTs(Date.now())
+                            }
+                            return next
+                          })
+                        }}
+                        title={analysisPaused ? 'Resume analysis live view' : 'Pause analysis to freeze dataset'}
+                      >
+                        {analysisPaused ? <PlayArrowIcon fontSize='small' /> : <PauseIcon fontSize='small' />}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (!analysisSnapshot) return
+                          const earliest = analysisSnapshot[0]?.ts ?? analysisEndTs
+                          const minEnd = earliest + timeRange*1000
+                          setAnalysisEndTs(t => Math.max(minEnd, t - stepMs))
+                        }}
+                        disabled={!analysisNav?.canBack}
+                        title='Back'
+                      >
+                        <ArrowBackIcon fontSize='small' />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (!analysisSnapshot) return
+                          const last = analysisSnapshot[analysisSnapshot.length-1]?.ts ?? analysisEndTs
+                          setAnalysisEndTs(t => Math.min(last, t + stepMs))
+                        }}
+                        disabled={!analysisNav?.canForward}
+                        title='Forward'
+                      >
+                        <ArrowForwardIcon fontSize='small' />
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const rows = ['x,y']
+                          for (const p of analysisView.points){
+                            rows.push(`${p.x},${p.y}`)
+                          }
+                          const blob = new Blob([rows.join('\n')], { type: 'text/csv' })
+                          const fname = `${id.replace(/[^a-z0-9_-]/gi,'_')}_${metric}_${analysisTransform}_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)
+                        }}
+                        title='Export analysis as CSV'
+                      >
+                        Record Analysis
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-              <button onClick={()=>setPaused(p=>!p)}>{paused? 'Play' : 'Pause'}</button>
-              <button onClick={handleBack}>◀ Back</button>
-              <button onClick={handleForward}>Forward ▶</button>
               <button onClick={()=>doZero()}>{onStageZero ? 'Stage Zero' : 'Zero'}</button>
               <button onClick={()=>setShowSetDialog(true)}>{onStageSet ? 'Stage Set' : 'Set'}</button>
               <button onClick={()=>{ const s = parseInt(prompt('Record seconds','10')||'0'); if (s>0) doRecord(s) }}>Record CSV</button>

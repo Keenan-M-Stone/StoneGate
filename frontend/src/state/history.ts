@@ -42,6 +42,13 @@ class HistoryStore {
     const arr = this.data.get(deviceId) ?? []
     return arr.length? arr[arr.length-1] : null
   }
+
+  // return a stable copy of the current sample buffer for the device
+  snapshot(deviceId: string){
+    const arr = this.data.get(deviceId) ?? []
+    // shallow-clone samples and measurement maps so callers can hold it while live updates continue
+    return arr.map(s => ({ ts: s.ts, measurements: { ...s.measurements } }))
+  }
 }
 
 const History = new HistoryStore()

@@ -13,6 +13,7 @@ import SchematicsDialog from './components/SchematicsDialog'
 import DiagnosticsWindow from './components/DiagnosticsWindow'
 import InstallationWizardDialog from './components/InstallationWizardDialog'
 import AppHelpDialog from './components/AppHelpDialog'
+import InspectDock from './components/InspectDock'
 
 
 export default function App() {
@@ -26,8 +27,7 @@ export default function App() {
 
   const devices = useDeviceStore(s => s.devices)
 
-  const [selectedNode, setSelectedNode] = React.useState<string | null>(null)
-  const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [openInspectIds, setOpenInspectIds] = React.useState<string[]>([])
   const [buildMode, setBuildMode] = React.useState<boolean>(() => {
     try { return (localStorage.getItem('stonegate.build_mode') || 'false') === 'true' } catch { return false }
   })
@@ -43,12 +43,14 @@ export default function App() {
     try { localStorage.setItem('stonegate.build_mode', buildMode ? 'true' : 'false') } catch {}
   }, [buildMode])
 
-  const onSelectNode = (id?: string|null) => { setSelectedNode(id??null) }
-  const onOpenDialog = (id:string) => { setSelectedNode(id); setDialogOpen(true) }
+  const onSelectNode = (_id?: string|null) => {}
+  const onOpenDialog = (id:string) => {
+    setOpenInspectIds(prev => (prev.includes(id) ? prev : [...prev, id]))
+  }
 
 
   return (
-    <div style={{ padding: 12, fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: 12, fontFamily: 'Inter, sans-serif', overflowX: 'auto' }}>
       <header style={{ marginBottom: 12 }}>
         <h2> Stone Gate: Quantum Control - Diagnostic Schematic </h2>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -58,6 +60,18 @@ export default function App() {
           </div>
       </header>
           <SchematicCanvas buildMode={buildMode} onSelectNode={onSelectNode} onOpenDialog={onOpenDialog} />
+          <InspectDock
+            openIds={openInspectIds}
+            onClose={(id) => setOpenInspectIds(prev => prev.filter(x => x !== id))}
+            childrenForId={(id) => (
+              <ComponentDialog
+                id={id}
+                status={devices[id]}
+                schema={undefined}
+                onClose={() => setOpenInspectIds(prev => prev.filter(x => x !== id))}
+              />
+            )}
+          />
           <SideMenu
             buildMode={buildMode}
             setBuildMode={setBuildMode}
@@ -77,11 +91,6 @@ export default function App() {
           <SchematicsDialog open={showSchematics} onClose={() => setShowSchematics(false)} />
           <InstallationWizardDialog open={showInstallWizard} onClose={() => setShowInstallWizard(false)} />
           <AppHelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
-        {dialogOpen && selectedNode && (
-          <div style={{ position: 'relative', left: '50%', top: '10%', transform: 'translateX(-50%)', zIndex: 80 }}>
-            <ComponentDialog id={selectedNode} status={devices[selectedNode]} schema={undefined} onClose={() => setDialogOpen(false)} />
-          </div>
-        )}
         <footer style={{ marginTop: 12 }}>
         <small>Nodes show "NO SIGNAL" until backend sends updates.</small>
       </footer>

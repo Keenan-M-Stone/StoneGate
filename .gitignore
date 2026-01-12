@@ -19,6 +19,9 @@ Thumbs.db
 **/.turbo/
 **/.vite/
 
+# Generated public tool mirrors (source-of-truth lives in /tools)
+frontend/public/tools/live-transform-demo/
+
 # Python
 __pycache__/
 *.py[cod]

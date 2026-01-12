@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "sync:live-transform-demo": "node scripts/sync-live-transform-demo.mjs",
+    "dev": "pnpm -s sync:live-transform-demo && vite",
     "wizard:build": "node ../tools/install-wizard/build.mjs",
-    "build": "pnpm -s wizard:build && tsc -b && vite build",
+    "build": "pnpm -s wizard:build && pnpm -s sync:live-transform-demo && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "stonegate:ps": "node scripts/stonegate-admin.mjs list",
@@ -24,6 +25,8 @@
     "@mui/material": "^7.3.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-grid-layout": "^2.2.2",
+    "react-resizable": "^3.1.3",
     "recharts": "^3.4.1",
     "zustand": "^5.0.8"
   },
