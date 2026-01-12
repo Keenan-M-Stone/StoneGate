@@ -1,5 +1,5 @@
 # Builds the StoneGate frontend from source and serves it as static content.
-# Expects source under /context/source/frontend plus wizard + docs.
+# Expects source under /context/source/frontend.
 
 FROM node:20-bookworm-slim AS build
 
@@ -11,8 +11,6 @@ RUN corepack enable
 # Copy sources required for build
 COPY source/frontend /context/frontend
 COPY source/shared /context/shared
-COPY source/tools/install-wizard /context/tools/install-wizard
-COPY source/docs/installation-wizard.md /context/docs/installation-wizard.md
 
 RUN pnpm -C /context/frontend -s install
 RUN pnpm -C /context/frontend -s build

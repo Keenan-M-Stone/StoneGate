@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "sync:docs": "node scripts/sync-docs.mjs",
     "sync:live-transform-demo": "node scripts/sync-live-transform-demo.mjs",
-    "dev": "pnpm -s sync:live-transform-demo && vite",
-    "wizard:build": "node ../tools/install-wizard/build.mjs",
-    "build": "pnpm -s wizard:build && pnpm -s sync:live-transform-demo && tsc -b && vite build",
+    "dev": "pnpm -s sync:docs && pnpm -s sync:live-transform-demo && vite",
+    "build": "pnpm -s sync:docs && pnpm -s sync:live-transform-demo && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "stonegate:ps": "node scripts/stonegate-admin.mjs list",

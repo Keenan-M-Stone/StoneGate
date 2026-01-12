@@ -1,0 +1,24 @@
+{
+  "plugins": [
+    {
+      "id": "example",
+      "label": "Example script (derivative)",
+      "module": "./example-plugin.mjs"
+    },
+    {
+      "id": "bloch_python",
+      "label": "Bloch sphere (Python, multi-device)",
+      "module": "./bloch-python.mjs"
+    },
+    {
+      "id": "bloch_sdk_python",
+      "label": "Bloch sphere (Python + stonegate_api)",
+      "module": "./bloch-sdk-python.mjs"
+    },
+    {
+      "id": "qec_health_cpp",
+      "label": "QEC health (C++ + stonegate_qec)",
+      "module": "./qec-health-cpp.mjs"
+    }
+  ]
+}

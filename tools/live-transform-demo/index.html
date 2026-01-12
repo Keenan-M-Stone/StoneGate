@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StoneGate • Live Transforms</title>
+    <style>
+      body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #071827; color: #e6eef8; }
+      header { padding: 12px 14px; border-bottom: 1px solid rgba(180,220,255,0.12); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+      .badge { font-size: 12px; color: #9bb3c7; }
+      main { padding: 14px; display: grid; gap: 14px; }
+      .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      select, input[type="text"], input[type="number"], button { background: #0b2436; color: #e6eef8; border: 1px solid rgba(180,220,255,0.18); padding: 6px 8px; border-radius: 6px; }
+      button { cursor: pointer; }
+      button:disabled { opacity: 0.45; cursor: not-allowed; }
+      .panel { background: rgba(2,10,18,0.55); border: 1px solid rgba(180,220,255,0.12); border-radius: 10px; padding: 10px; }
+      .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      @media (max-width: 1200px){ .grid2 { grid-template-columns: 1fr; } }
+      canvas { width: 100%; height: 280px; background: #04121d; border-radius: 8px; border: 1px solid rgba(180,220,255,0.12); }
+      .hint { color:#9bb3c7; font-size: 12px; line-height: 1.4; }
+      code { color:#d7e8ff; }
+      .panelTitle { display:flex; justify-content:space-between; align-items:center; gap: 10px; margin-bottom: 8px; }
+      .panelTitle .left { display:flex; gap: 10px; align-items:center; flex-wrap: wrap; }
+      .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(180,220,255,0.18); background: rgba(11, 36, 54, 0.75); color: #cfe4ff; }
+      .tag.live { border-color: rgba(80, 200, 120, 0.35); color: #baf5d1; }
+      .tag.script { border-color: rgba(140, 180, 255, 0.35); color: #cfe0ff; }
+      .tag.both { border-color: rgba(240, 190, 120, 0.35); color: #ffe2b8; }
+    </style>
+    <script src="../../stonegate-config.js"></script>
+  </head>
+  <body>
+    <header>
+      <div style="font-weight:800;">StoneGate • Live Transforms</div>
+      <div class="badge" id="wsBadge"></div>
+    </header>
+
+    <main>
+      <div class="panel">
+        <div class="panelTitle">
+          <div class="left">
+            <div style="font-weight:700">Connection</div>
+            <span class="tag both">Used by: live + scripts</span>
+          </div>
+          <div class="hint">WS connects to StoneGate backend</div>
+        </div>
+        <div class="row">
+          <label>WS URL: <input id="wsUrl" type="text" style="width: 360px" /></label>
+          <button id="connectBtn">Connect</button>
+          <button id="disconnectBtn">Disconnect</button>
+          <span class="badge" id="status"></span>
+        </div>
+        <div class="hint">
+          Uses the same default endpoint as the main UI (localStorage <code>stonegate.ws_url</code> or <code>__STONEGATE_CONFIG__.ws_url</code>).
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panelTitle">
+          <div class="left">
+            <div style="font-weight:700">Live time series</div>
+            <span class="tag live">Used by: live plot</span>
+          </div>
+          <div class="hint">Select what the live plot shows</div>
+        </div>
+
+        <div class="row">
+          <label>Device: <select id="deviceSel"></select></label>
+          <label>Metric: <select id="metricSel"></select></label>
+          <label>Range (s): <input id="rangeSec" type="number" min="1" max="600" step="1" value="30" style="width: 84px" /></label>
+          <label>Refresh (Hz): <input id="refreshHz" type="number" min="0.2" max="30" step="0.2" value="2" style="width: 84px" /></label>
+        </div>
+
+        <div class="panelTitle" style="margin-top: 12px;">
+          <div class="left">
+            <div style="font-weight:700">Transform script</div>
+            <span class="tag script">Used by: scripts</span>
+          </div>
+          <div class="hint">Controls vary by script</div>
+        </div>
+
+        <div class="row">
+          <span id="scriptApiRow" class="row" style="display: contents;">
+            <label>External API: <input id="apiUrl" type="text" style="width: 280px" /></label>
+          </span>
+          <label>Script: <select id="pluginSel"></select></label>
+          <label>Transform: <select id="transformSel"></select></label>
+          <button id="reloadScriptsBtn" title="Re-fetch plugins/manifest.json and refresh the Script menu">Reload scripts</button>
+          <button id="refreshScriptBtn" title="Reload the currently selected script module (useful during development)">Refresh current</button>
+          <label style="display:flex; gap:8px; align-items:center;">Browse script… <input id="pluginFile" type="file" accept=".js,.mjs" /></label>
+        </div>
+
+        <div id="scriptAxesRow" class="row" style="margin-top:8px;">
+          <span class="badge" style="min-width: 52px;">Axes:</span>
+          <label>X <select id="xDeviceSel"></select></label>
+          <label>Metric <select id="xMetricSel"></select></label>
+          <label>Y <select id="yDeviceSel"></select></label>
+          <label>Metric <select id="yMetricSel"></select></label>
+          <label>Z <select id="zDeviceSel"></select></label>
+          <label>Metric <select id="zMetricSel"></select></label>
+          <label>Aggregation
+            <select id="axisAggSel">
+              <option value="mean">Mean (window)</option>
+              <option value="latest">Latest sample</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="scriptExtraControls" class="row" style="margin-top:10px;"></div>
+
+        <div class="hint">
+          Script file should be a JavaScript module. Start from <code>tools/live-transform-demo/plugin-template.mjs</code>.
+          Built-in scripts are listed in <code>tools/live-transform-demo/plugins/manifest.json</code>.
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700">Live (time series)</div>
+            <div class="badge" id="liveMeta"></div>
+          </div>
+          <canvas id="liveCanvas" width="900" height="280"></canvas>
+        </div>
+
+        <div class="panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700">Transform output</div>
+            <div class="badge" id="xformMeta"></div>
+          </div>
+          <canvas id="xformCanvas" width="900" height="280"></canvas>
+        </div>
+      </div>
+
+      <div class="panel hint">
+        This tool runs transform scripts locally in your browser tab. For heavier analysis (Python, SciPy, etc.), run your own external process and use the backend API or recordings.
+      </div>
+    </main>
+
+    <script type="module" src="./main.mjs"></script>
+  </body>
+</html>

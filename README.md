@@ -75,15 +75,11 @@ pnpm dev       # or npm run dev
 ```
 
 UI notes:
-- The **Tools** menu includes **Diagnostics**, **Installation Wizard**, and **Help**.
+- The **Tools** menu includes **Diagnostics** and **Help**.
 - **Help** shows the frontend version, git commit, and build time (injected at build time).
 
-Installation Wizard content:
-- Source-of-truth: `docs/installation-wizard.md`
-- Generated file: `frontend/src/generated/installWizard.ts`
-- Regenerate manually: `pnpm -C frontend wizard:build` (also runs automatically during `pnpm -C frontend build`).
-
-Note: the frontend also supports a separate *bundle installer* flow (CLI wizard + scripts). See the "Distribution / Installer" section.
+Note: StoneGate includes a separate *bundle installer* flow (CLI wizard + scripts) for distribution and deployment.
+See the "Distribution / Installer" section.
 
 ---
 

@@ -116,8 +116,7 @@ if [[ $include_source -eq 1 ]]; then
     backend \
     frontend \
     shared \
-    tools/install-wizard \
-    docs/installation-wizard.md \
+    tools/installer \
     README.md \
     | tar -C "$bundle_dir/source" -xf -
 fi
