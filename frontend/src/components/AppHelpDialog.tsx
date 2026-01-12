@@ -8,15 +8,9 @@ export default function AppHelpDialog({ open, onClose }: { open: boolean; onClos
 
   const handleCheckForUpdates = () => {
     const latestReleaseUrl = `${repoUrl}/releases/latest`
-    try {
-      const newWindow = window.open(latestReleaseUrl, '_blank', 'noopener,noreferrer')
-      if (!newWindow) {
-        // Fallback if popup is blocked
-        window.location.href = latestReleaseUrl
-      }
-    } catch (error) {
-      // Final fallback
-      window.location.href = latestReleaseUrl
+    const newWindow = window.open(latestReleaseUrl, '_blank', 'noopener,noreferrer')
+    if (newWindow) {
+      try { newWindow.opener = null } catch {}
     }
   }
 
