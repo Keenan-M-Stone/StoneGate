@@ -75,13 +75,12 @@ pnpm dev       # or npm run dev
 ```
 
 UI notes:
-- The **Tools** menu includes **Diagnostics**, **Installation Wizard**, and **Help**.
-- **Help** shows the frontend version, git commit, and build time (injected at build time).
-
-Installation Wizard content:
-- Source-of-truth: `docs/installation-wizard.md`
-- Generated file: `frontend/src/generated/installWizard.ts`
-- Regenerate manually: `pnpm -C frontend wizard:build` (also runs automatically during `pnpm -C frontend build`).
+- The **Tools** menu includes **Diagnostics** and **Help**.
+- **Help** provides:
+  - Frontend version, git commit, and build time (injected at build time)
+  - Links to documentation (Developer Guide, Software Specifications, Tooling Guide)
+  - Link to the Error Catalog with numbered error codes
+  - "Check for Updates" button to navigate to the latest release
 
 Note: the frontend also supports a separate *bundle installer* flow (CLI wizard + scripts). See the "Distribution / Installer" section.
 
