@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+PORT=8080
+LOG_FILE="/tmp/StoneGate.log"
+PID_FILE="/tmp/StoneGate.pid"
+
+SKIP_BACKEND_BUILD=0
+SKIP_BACKEND_START=0
+
+SKIP_FRONTEND_INSTALL=0
+SKIP_FRONTEND_BUILD=0
+SKIP_FRONTEND_START=0
+
+FRONTEND_MODE="dev"  # preview|dev
+FRONTEND_PORT=4173
+FRONTEND_HOST="127.0.0.1"
+
+BACKGROUND_FRONTEND=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --port) PORT="$2"; shift 2;;
+    --log) LOG_FILE="$2"; shift 2;;
+    --pid) PID_FILE="$2"; shift 2;;
+    --skip-backend-build) SKIP_BACKEND_BUILD=1; shift;;
+    --skip-backend-start) SKIP_BACKEND_START=1; shift;;
+    --skip-frontend-install) SKIP_FRONTEND_INSTALL=1; shift;;
+    --skip-frontend-build) SKIP_FRONTEND_BUILD=1; shift;;
+    --skip-frontend-start) SKIP_FRONTEND_START=1; shift;;
+    --frontend-mode) FRONTEND_MODE="$2"; shift 2;;
+    --frontend-port) FRONTEND_PORT="$2"; shift 2;;
+    --frontend-host) FRONTEND_HOST="$2"; shift 2;;
+    --background-frontend) BACKGROUND_FRONTEND=1; shift;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/run_sim_stack [options]
+
+Builds and runs the simulator backend (nohup) and builds+launches the frontend.
+
+Options:
+  --port <n>                 Backend port (default 8080)
+  --log <path>               Backend log file (default /tmp/StoneGate.log)
+  --pid <path>               Backend pid file (default /tmp/StoneGate.pid)
+  --skip-backend-build
+  --skip-backend-start
+  --skip-frontend-install
+  --skip-frontend-build
+  --skip-frontend-start
+  --frontend-mode preview|dev (default preview)
+  --frontend-host <host>     (default 127.0.0.1)
+  --frontend-port <n>        (default 4173 for preview)
+  --background-frontend      Run frontend server under nohup
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+if [[ "$SKIP_BACKEND_BUILD" -eq 0 ]]; then
+  ensure cmake
+  (
+    cd backend
+    mkdir -p build
+    cd build
+    run cmake ..
+    run cmake --build . -- -j"$(nproc)"
+  )
+else
+  log "Skipping backend build"
+fi
+
+if [[ "$SKIP_BACKEND_START" -eq 0 ]]; then
+  if [[ -f "$PID_FILE" ]]; then
+    OLD_PID="$(cat "$PID_FILE" || true)"
+    if [[ -n "${OLD_PID:-}" ]] && kill -0 "$OLD_PID" >/dev/null 2>&1; then
+      log "Backend already running (pid $OLD_PID). Stop it or remove $PID_FILE to restart."
+    else
+      rm -f "$PID_FILE" || true
+    fi
+  fi
+
+  if [[ ! -f "$PID_FILE" ]]; then
+    log "Starting backend simulator on port $PORT (nohup)"
+    nohup ./backend/build/StoneGate --sim --port "$PORT" >"$LOG_FILE" 2>&1 &
+    echo $! >"$PID_FILE"
+    log "Backend pid: $(cat "$PID_FILE")"
+    log "Backend log: $LOG_FILE"
+  fi
+else
+  log "Skipping backend start"
+fi
+
+# Frontend
+if [[ "$SKIP_FRONTEND_INSTALL" -eq 0 ]]; then
+  ensure pnpm
+  (
+    cd frontend
+    if [[ ! -d node_modules ]]; then
+      run pnpm install
+    fi
+  )
+else
+  log "Skipping frontend install"
+fi
+
+if [[ "$FRONTEND_MODE" == "preview" ]]; then
+  if [[ "$SKIP_FRONTEND_BUILD" -eq 0 ]]; then
+    ensure pnpm
+    (cd frontend && run pnpm -s run build)
+  else
+    log "Skipping frontend build"
+  fi
+
+  if [[ "$SKIP_FRONTEND_START" -eq 0 ]]; then
+    ensure pnpm
+    if [[ "$BACKGROUND_FRONTEND" -eq 1 ]]; then
+      log "Starting frontend preview (nohup)"
+      (cd frontend && nohup pnpm -s preview --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" > /tmp/StoneGate_frontend.log 2>&1 &)
+      log "Frontend preview log: /tmp/StoneGate_frontend.log"
+    else
+      log "Starting frontend preview (foreground)"
+      log "Open: http://$FRONTEND_HOST:$FRONTEND_PORT/"
+      (cd frontend && exec pnpm -s preview --host "$FRONTEND_HOST" --port "$FRONTEND_PORT")
+    fi
+  else
+    log "Skipping frontend start"
+  fi
+elif [[ "$FRONTEND_MODE" == "dev" ]]; then
+  if [[ "$SKIP_FRONTEND_START" -eq 0 ]]; then
+    ensure pnpm
+    if [[ "$BACKGROUND_FRONTEND" -eq 1 ]]; then
+      log "Starting frontend dev server (nohup)"
+      (cd frontend && nohup pnpm -s dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" > /tmp/StoneGate_frontend.log 2>&1 &)
+      log "Frontend dev log: /tmp/StoneGate_frontend.log"
+    else
+      log "Starting frontend dev server (foreground)"
+      log "Open: http://$FRONTEND_HOST:$FRONTEND_PORT/"
+      (cd frontend && exec pnpm -s dev --host "$FRONTEND_HOST" --port "$FRONTEND_PORT")
+    fi
+  else
+    log "Skipping frontend start"
+  fi
+else
+  fatal "Unknown --frontend-mode: $FRONTEND_MODE (expected preview|dev)"
+fi

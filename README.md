@@ -1,5 +1,8 @@
 # StoneGate: Quantum Architecture Monitoring & Control
 
+For a quick start of the full application and simulator, refer to the `scripts` directory contents.
+Consult the `scripts/README.md` and consider using the `scripts/setup_and_launch` convenience tool.
+
 **Goals:**  
 
 - [ ] Provide a working, well-structured skeleton codebase that implements subsystems for controlling quantum architecture:
@@ -80,6 +83,12 @@ UI notes:
 
 Note: StoneGate includes a separate *bundle installer* flow (CLI wizard + scripts) for distribution and deployment.
 See the "Distribution / Installer" section.
+
+---
+
+## Convenience scripts
+
+For common one-command workflows (generate docs/SDKs, build + launch sim backend + frontend), see [scripts/README.md](scripts/README.md).
 
 ---
 

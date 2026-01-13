@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+SKIP_SYNC=0
+OUT="docs/Error_Messages.md"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-sync) SKIP_SYNC=1; shift;;
+    --out) OUT="$2"; shift 2;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/makedocs [--out <path>] [--skip-sync]
+
+- Validates and regenerates docs/Error_Messages.md from shared/config/errors.json
+- Optionally runs frontend's docs sync (symlink-first)
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+ensure node
+run node tools/generate_error_messages.mjs --check
+run node tools/generate_error_messages.mjs --out "$OUT"
+
+if [[ "$SKIP_SYNC" -eq 0 ]]; then
+  if have pnpm && [[ -f frontend/package.json ]]; then
+    (cd frontend && run pnpm -s sync:docs)
+  else
+    log "Skipping frontend docs sync (pnpm not found or frontend missing)"
+  fi
+fi
+
+log "Docs regenerated."

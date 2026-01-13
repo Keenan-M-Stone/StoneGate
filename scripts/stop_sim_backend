@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+PID_FILE="/tmp/StoneGate.pid"
+SIG="TERM"
+WAIT_SEC=5
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --pid) PID_FILE="$2"; shift 2;;
+    --sig) SIG="$2"; shift 2;;
+    --wait) WAIT_SEC="$2"; shift 2;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/stop_sim_backend [--pid <file>] [--sig TERM|INT|KILL] [--wait <sec>]
+
+Stops a backend started by scripts/run_sim_stack (nohup) by reading the pid file.
+Default pid file: /tmp/StoneGate.pid
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ! -f "$PID_FILE" ]]; then
+  log "No pid file at $PID_FILE (backend not started by script, or already stopped)."
+  exit 0
+fi
+
+PID="$(cat "$PID_FILE" || true)"
+if [[ -z "${PID:-}" ]]; then
+  log "Empty pid file: $PID_FILE"
+  rm -f "$PID_FILE" || true
+  exit 0
+fi
+
+if ! kill -0 "$PID" >/dev/null 2>&1; then
+  log "Process $PID not running; removing stale pid file."
+  rm -f "$PID_FILE" || true
+  exit 0
+fi
+
+log "Stopping backend pid $PID (SIG$SIG)"
+kill "-$SIG" "$PID" || true
+
+# Wait for graceful exit (unless SIGKILL)
+if [[ "$SIG" != "KILL" ]]; then
+  end=$(( $(date +%s) + WAIT_SEC ))
+  while kill -0 "$PID" >/dev/null 2>&1; do
+    if [[ $(date +%s) -ge $end ]]; then
+      log "Process still running after ${WAIT_SEC}s; sending SIGKILL"
+      kill -KILL "$PID" || true
+      break
+    fi
+    sleep 0.2
+  done
+fi
+
+rm -f "$PID_FILE" || true
+log "Stopped."

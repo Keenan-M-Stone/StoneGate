@@ -12,7 +12,11 @@ nlohmann::json QECModuleDevice::descriptor() const {
         {"type", "qec_module"},
         {"code_type", code_type},
         {"status", "ok"},
-        {"specs", { {"max_sampling_rate_hz", 10.0} }},
+        {"specs", {
+             {"max_sampling_rate_hz", 10.0},
+             {"manufacturer", "Stone Labs: BlackBox Division"},
+             {"datasheet_url", "https://example.com/qec_module"}
+        }},
         {"metrics", {
             {"syndrome", { {"kind", "integer"} }},
             {"correction_applied", { {"kind", "boolean"} }}

@@ -2,6 +2,8 @@
 
 This page is meant to be the quick “cause → action” guide you can jump to from the StoneGate UI.
 
+For the full numbered, source-of-truth catalog (with consistent numbering blocks and multi-cause/multi-action guidance), see [Error_Messages.md](Error_Messages.md).
+
 ## First checks
 
 - Confirm the backend is running and the frontend shows **Connected**.

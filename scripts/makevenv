@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+VENV_DIR=".venv"
+USE_CURRENT=0
+NO_ACTIVATE=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --venv) VENV_DIR="$2"; shift 2;;
+    --current|--current-env) USE_CURRENT=1; shift;;
+    --no-activate) NO_ACTIVATE=1; shift;;
+    -h|--help)
+      cat <<'EOF'
+Usage:
+  scripts/makevenv [--venv <dir>] [--current-env] [--no-activate]
+
+Creates a virtualenv (default: .venv), installs deps, and installs the generated Python SDK.
+
+Notes:
+- If you want the venv to remain activated in your shell, source this script:
+    source scripts/makevenv
+- Use --current-env to install into the current Python environment instead of a venv.
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+ensure python3
+
+PY=python3
+
+if [[ "$USE_CURRENT" -eq 0 ]]; then
+  if [[ ! -d "$VENV_DIR" ]]; then
+    run python3 -m venv "$VENV_DIR"
+  fi
+
+  # shellcheck disable=SC1090
+  source "$VENV_DIR/bin/activate"
+  PY=python
+  run "$PY" -m pip install -U pip
+else
+  log "Installing into current environment"
+  run "$PY" -m pip install -U pip
+fi
+
+# Base deps (keep conservative and repo-local)
+run "$PY" -m pip install -U flask jsonschema requests
+
+# Live transform python deps (optional)
+if [[ -f tools/live-transform-demo/python/requirements.txt ]]; then
+  run "$PY" -m pip install -r tools/live-transform-demo/python/requirements.txt
+fi
+
+# Ensure SDK exists, then install it.
+if [[ ! -d sdk/python/stonegate_sdk ]]; then
+  run python3 tools/generate_stonegate_sdk.py
+fi
+
+run "$PY" -m pip install -e sdk/python/stonegate_sdk
+
+if [[ "$USE_CURRENT" -eq 0 ]]; then
+  if [[ "$NO_ACTIVATE" -eq 1 ]]; then
+    log "Venv created at $VENV_DIR (not left activated)"
+  else
+    if is_sourced; then
+      log "Venv is active in this shell"
+    else
+      log "Venv created. To activate: source $VENV_DIR/bin/activate"
+    fi
+  fi
+fi

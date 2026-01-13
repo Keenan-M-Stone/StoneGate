@@ -12,7 +12,11 @@ nlohmann::json QuantumRegisterDevice::descriptor() const {
         {"type", "quantum_register"},
         {"size", reg_size},
         {"status", "ok"},
-        {"specs", { {"max_sampling_rate_hz", 2.0} }},
+        {"specs", { 
+            {"max_sampling_rate_hz", 2.0},
+            {"manufacturer", "Stone Labs: Spintronix Division"},
+            {"datasheet_url", "https://example.com/quantum_register"}
+        }},
         {"metrics", {
             {"state_vector", { {"kind", "vector"} }}
         }}

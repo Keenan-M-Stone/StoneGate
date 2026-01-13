@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+SKIP_VENV=0
+SKIP_PLUGINS=0
+SKIP_DOCS=0
+SKIP_RUN=0
+
+CURRENT_ENV=0
+
+# passthrough args for run_sim_stack
+RUN_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-venv) SKIP_VENV=1; shift;;
+    --skip-plugins) SKIP_PLUGINS=1; shift;;
+    --skip-docs) SKIP_DOCS=1; shift;;
+    --skip-run) SKIP_RUN=1; shift;;
+    --current-env) CURRENT_ENV=1; shift;;
+
+    # Everything else passes through to run_sim_stack
+    *) RUN_ARGS+=("$1"); shift;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+log "Quick setup + launch"
+
+# 1) Python env (optional)
+if [[ "$SKIP_VENV" -eq 0 ]]; then
+  if [[ "$CURRENT_ENV" -eq 1 ]]; then
+    run bash scripts/makevenv --current-env --no-activate
+  else
+    if is_sourced; then
+      # shellcheck disable=SC1091
+      source scripts/makevenv
+    else
+      run bash scripts/makevenv --no-activate
+    fi
+  fi
+else
+  log "Skipping venv setup"
+fi
+
+# 2) SDKs + plugin resources
+if [[ "$SKIP_PLUGINS" -eq 0 ]]; then
+  run bash scripts/makeplugins
+else
+  log "Skipping plugins/SDK generation"
+fi
+
+# 3) Docs (error catalog + frontend docs sync)
+if [[ "$SKIP_DOCS" -eq 0 ]]; then
+  run bash scripts/makedocs
+else
+  log "Skipping docs generation"
+fi
+
+# 4) Build + launch simulator stack
+if [[ "$SKIP_RUN" -eq 0 ]]; then
+  run bash scripts/run_sim_stack "${RUN_ARGS[@]}"
+else
+  log "Skipping run_sim_stack"
+fi
+
+log "Setup script complete."

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+KEEP_DOCS=0
+DEEP=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep-docs) KEEP_DOCS=1; shift;;
+    --deep) DEEP=1; shift;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/makeclean [--keep-docs] [--deep]
+
+Removes generated/build outputs.
+
+Default removes:
+- backend/build, tools/build, tools/live-transform-demo/cpp/build
+- frontend/dist, frontend/public/docs-src, frontend/public/tools/live-transform-demo
+- sdk/
+
+Options:
+- --keep-docs : do not remove docs/Error_Messages.md
+- --deep      : additionally remove node_modules (slow)
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+log "Cleaning generated/build outputs..."
+
+rm -rf backend/build tools/build tools/live-transform-demo/cpp/build \
+  frontend/dist frontend/public/docs-src frontend/public/tools/live-transform-demo \
+  sdk || true
+
+if [[ "$KEEP_DOCS" -eq 0 ]]; then
+  rm -f docs/Error_Messages.md || true
+fi
+
+if [[ "$DEEP" -eq 1 ]]; then
+  log "Deep clean: removing node_modules (this can take a while)"
+  rm -rf backend/node_modules frontend/node_modules backend-sim/node_modules || true
+fi
+
+log "Done."

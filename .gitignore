@@ -12,6 +12,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Local run state (pids, helper logs, etc.)
+.run/
+
 # Node
 **/node_modules/
 **/dist/
@@ -21,6 +24,9 @@ Thumbs.db
 
 # Generated public tool mirrors (source-of-truth lives in /tools)
 frontend/public/tools/live-transform-demo/
+
+# Generated docs mirror/link (source-of-truth lives in /docs)
+frontend/public/docs-src/
 
 # Python
 __pycache__/

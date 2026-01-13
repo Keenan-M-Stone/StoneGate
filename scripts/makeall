@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+SKIP_VENV=0
+CURRENT_ENV=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-venv) SKIP_VENV=1; shift;;
+    --current-env) CURRENT_ENV=1; shift;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/makeall [--skip-venv] [--current-env]
+
+Runs the convenience regeneration steps:
+- makevenv (optional)
+- makeplugins (SDKs + Live Transform C++ helpers)
+- makedocs (Error_Messages.md + frontend docs sync)
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+if [[ "$SKIP_VENV" -eq 0 ]]; then
+  if [[ "$CURRENT_ENV" -eq 1 ]]; then
+    run bash scripts/makevenv --current-env --no-activate
+  else
+    # Use "source" so activation can persist if user also sourced makeall.
+    if is_sourced; then
+      # shellcheck disable=SC1091
+      source scripts/makevenv
+    else
+      run bash scripts/makevenv --no-activate
+    fi
+  fi
+else
+  log "Skipping makevenv"
+fi
+
+run bash scripts/makeplugins
+run bash scripts/makedocs
+
+log "All regeneration steps complete."

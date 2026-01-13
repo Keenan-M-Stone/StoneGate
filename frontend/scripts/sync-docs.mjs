@@ -31,6 +31,16 @@ if (!fs.existsSync(srcDocs)) {
 
 // Clean destination to avoid stale files.
 fs.rmSync(destDocs, { recursive: true, force: true })
-copyDir(srcDocs, destDocs)
 
-console.log(`[sync] copied ${srcDocs} -> ${destDocs}`)
+// Prefer a symlink to avoid redundant copies of docs.
+// Source-of-truth stays in /docs; the frontend serves it from /public/docs-src.
+try {
+  // Use a relative link so it survives moves of the repo folder.
+  const relTarget = path.relative(path.dirname(destDocs), srcDocs)
+  fs.symlinkSync(relTarget, destDocs, 'dir')
+  console.log(`[sync] linked ${destDocs} -> ${relTarget} (source-of-truth: ${srcDocs})`)
+} catch (e) {
+  // Fallback for environments that don't support symlinks well.
+  copyDir(srcDocs, destDocs)
+  console.log(`[sync] copied ${srcDocs} -> ${destDocs} (symlink unavailable: ${String(e?.message ?? e)})`)
+}

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_lib.sh"
+
+SKIP_SDK=0
+SKIP_CPP=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-sdk) SKIP_SDK=1; shift;;
+    --skip-cpp) SKIP_CPP=1; shift;;
+    -h|--help)
+      cat <<'EOF'
+Usage: scripts/makeplugins [--skip-sdk] [--skip-cpp]
+
+- Generates SDKs from sources (tools/generate_stonegate_sdk.py)
+- Builds Live Transform C++ plugin resources (tools/live-transform-demo/cpp)
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown arg: $1" >&2
+      exit 1
+      ;;
+  esac
+done
+
+ROOT="$(repo_root)"
+cd "$ROOT"
+
+if [[ "$SKIP_SDK" -eq 0 ]]; then
+  ensure python3
+  run python3 tools/generate_stonegate_sdk.py
+else
+  log "Skipping SDK generation"
+fi
+
+if [[ "$SKIP_CPP" -eq 0 ]]; then
+  ensure cmake
+  if ! have g++ && ! have clang++; then
+    fatal "Missing C++ compiler (g++ or clang++)"
+  fi
+  (
+    cd tools/live-transform-demo/cpp
+    mkdir -p build
+    cd build
+    run cmake ..
+    run cmake --build . -- -j"$(nproc)"
+  )
+else
+  log "Skipping C++ Live Transform plugin build"
+fi
+
+log "Plugins/SDKs ready."

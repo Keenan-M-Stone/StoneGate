@@ -7,10 +7,10 @@ import deviceGraph from '../../../../shared/protocol/DeviceGraph.json'
 import ComponentNode from './ComponentNode'
 import Wire from './Wire'
 import { PanZoomContainer } from '../../utils/usePanZoom'
-import { UiErrors } from '../../utils/errorCatalog'
 
 export default function SchematicCanvas({ buildMode=false, showMiniMap=true, onSelectNode, onOpenDialog }:{ buildMode?:boolean, showMiniMap?: boolean, onSelectNode?: (id?:string|null)=>void, onOpenDialog?: (id:string)=>void }) {
   const devices = useDeviceStore(s => s.devices)
+  const descriptors = useDeviceStore(s => s.descriptors)
   const schematicOverride = useDeviceStore(s => s.schematicOverride)
 
   const [selected, setSelected] = React.useState<string | null>(null)
@@ -24,6 +24,7 @@ export default function SchematicCanvas({ buildMode=false, showMiniMap=true, onS
   const [assignDeviceId, setAssignDeviceId] = React.useState<string>('')
   const [assignMeasurementKey, setAssignMeasurementKey] = React.useState<string>('')
   const [assignCustomDeviceName, setAssignCustomDeviceName] = React.useState<string>('')
+  const [manualId, setManualId] = React.useState<string | null>(null)
 
   const activeGraph: any = schematicOverride?.graph ?? deviceGraph
   const activeSchema: any = schematicOverride?.schema ?? compSchema
@@ -366,6 +367,9 @@ export default function SchematicCanvas({ buildMode=false, showMiniMap=true, onS
 
   const closeAssign = () => setAssigningId(null)
 
+  const openManual = (nodeId: string) => setManualId(String(nodeId))
+  const closeManual = () => setManualId(null)
+
   const saveAssign = () => {
     if (!assigningId) return
     const nodeId = assigningId
@@ -499,7 +503,19 @@ export default function SchematicCanvas({ buildMode=false, showMiniMap=true, onS
     </g>
   )
 
+  const manualDescriptor = manualId ? (descriptors as any)?.[manualId] : null
+  const manualSpecs = manualDescriptor?.specs ?? {}
+  const manualMetrics = manualDescriptor?.metrics ?? {}
+
+  const fmt = (v: any) => {
+    if (v === null || v === undefined) return '—'
+    if (typeof v === 'string') return v
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+    try { return JSON.stringify(v) } catch { return String(v) }
+  }
+
 return (
+  <>
   <PanZoomContainer
     contentWidth={viewWidth}
     contentHeight={viewHeight}
@@ -816,7 +832,7 @@ return (
                   <div style={{ position:'absolute', right:6, top:6, zIndex:50 }}>
                     <div style={{ display:'flex', gap:6 }} data-schematic-ui="true">
                       <button onClick={(e)=>{ e.stopPropagation(); onOpenDialog?.(n.id) }}>Inspect</button>
-                      <button onClick={(e)=>{ e.stopPropagation(); alert(UiErrors.featureNotImplemented('Manual Control')) }}>Manual</button>
+                      <button onClick={(e)=>{ e.stopPropagation(); openManual(String(n.id)) }}>Man</button>
                       {buildMode && (
                         <>
                           <button
@@ -890,5 +906,91 @@ return (
       </g>
     </svg>
   </PanZoomContainer>
+  {manualId ? (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) closeManual()
+      }}
+    >
+      <div style={{ width: 720, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', background: '#0b1526', border: '1px solid rgba(90,170,255,0.25)', borderRadius: 10, padding: 14, textAlign: 'left' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 800 }}>Manual • {manualId}</div>
+          <button onClick={(e) => { e.stopPropagation(); closeManual() }}>Close</button>
+        </div>
+
+        {!manualDescriptor ? (
+          <div style={{ color: 'rgba(230,238,248,0.8)' }}>
+            No descriptor available yet for this device. Connect the backend and wait for discovery.
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 8, marginBottom: 12 }}>
+              <div style={{ opacity: 0.8 }}>Type</div><div>{fmt(manualDescriptor.type)}</div>
+              <div style={{ opacity: 0.8 }}>Status</div><div>{fmt(manualDescriptor.status)}</div>
+              <div style={{ opacity: 0.8 }}>Manufacturer</div><div>{fmt((manualSpecs as any).manufacturer)}</div>
+              <div style={{ opacity: 0.8 }}>Manual / Datasheet</div>
+              <div>
+                {typeof (manualSpecs as any).datasheet_url === 'string' && (manualSpecs as any).datasheet_url ? (
+                  <a href={(manualSpecs as any).datasheet_url} target="_blank" rel="noreferrer" style={{ color: '#9ec7ff' }}>
+                    {(manualSpecs as any).datasheet_url}
+                  </a>
+                ) : (
+                  <span style={{ opacity: 0.85 }}>—</span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Specs</div>
+            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
+              {Object.keys(manualSpecs).length ? (
+                Object.keys(manualSpecs).sort().map(k => (
+                  <div key={k} style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 10, padding: '6px 10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ opacity: 0.85 }}>{k}</div>
+                    <div style={{ color: 'rgba(230,238,248,0.95)', overflowWrap: 'anywhere' }}>{fmt((manualSpecs as any)[k])}</div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ padding: 10, opacity: 0.8 }}>No specs provided.</div>
+              )}
+            </div>
+
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Metrics</div>
+            <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+              {Object.keys(manualMetrics).length ? (
+                Object.keys(manualMetrics).sort().map(k => {
+                  const m = (manualMetrics as any)[k] ?? {}
+                  const meta = [
+                    m.kind ? `kind=${m.kind}` : null,
+                    m.unit ? `unit=${m.unit}` : null,
+                    m.backend_unit ? `backend_unit=${m.backend_unit}` : null,
+                    typeof m.precision === 'number' ? `precision=${m.precision}` : null,
+                    typeof m.min === 'number' ? `min=${m.min}` : null,
+                    typeof m.max === 'number' ? `max=${m.max}` : null,
+                  ].filter(Boolean).join(' • ')
+                  return (
+                    <div key={k} style={{ padding: '6px 10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ fontWeight: 650 }}>{k}</div>
+                        <div style={{ opacity: 0.75 }}>{meta || '—'}</div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div style={{ padding: 10, opacity: 0.8 }}>No metrics provided.</div>
+              )}
+            </div>
+
+            <details style={{ marginTop: 12 }}>
+              <summary style={{ cursor: 'pointer', opacity: 0.9 }}>Raw descriptor JSON</summary>
+              <pre style={{ marginTop: 8, background: '#01101a', padding: 10, borderRadius: 8, overflow: 'auto' }}>{JSON.stringify(manualDescriptor, null, 2)}</pre>
+            </details>
+          </>
+        )}
+      </div>
+    </div>
+  ) : null}
+  </>
 )
 }

@@ -1,13 +1,144 @@
 {
-  "ranges": {
-    "frontend":  { "start": 1000, "end": 1999 },
-    "backend":   { "start": 2000, "end": 2999 },
-    "qec":       { "start": 3000, "end": 3999 }
-  },
+  "blocks": [
+    {
+      "id": "UI_VALIDATION",
+      "origin": "frontend",
+      "title": "UI validation and input errors",
+      "start": 1000,
+      "end": 1099
+    },
+    {
+      "id": "UI_BUILD_MODE",
+      "origin": "frontend",
+      "title": "Build-mode / parts browser errors",
+      "start": 1100,
+      "end": 1199
+    },
+    {
+      "id": "BE_DEVICE_IO",
+      "origin": "backend",
+      "title": "Device read & status errors",
+      "start": 2000,
+      "end": 2199
+    },
+    {
+      "id": "BE_PARTS_OVERRIDES",
+      "origin": "backend",
+      "title": "Parts library / overrides errors",
+      "start": 2200,
+      "end": 2299
+    },
+    {
+      "id": "BE_PHYSICS_SIM",
+      "origin": "backend",
+      "title": "PhysicsEngine & simulation errors",
+      "start": 2300,
+      "end": 2399
+    },
+    {
+      "id": "BE_WS_CONTROL",
+      "origin": "backend",
+      "title": "WebSocket / control channel errors",
+      "start": 2400,
+      "end": 2499
+    },
+    {
+      "id": "QEC_SUBMIT",
+      "origin": "qec",
+      "title": "QEC submission/format errors",
+      "start": 3000,
+      "end": 3099
+    },
+    {
+      "id": "QEC_RUNTIME",
+      "origin": "qec",
+      "title": "QEC run-time errors",
+      "start": 3100,
+      "end": 3199
+    }
+  ],
   "errors": [
-    { "code": 1000, "message": "Invalid identifier: %s", "cause": "Malformed/illegal characters or length", "action": "Use only A-Za-z0-9_-:. and <=128 chars" },
-    { "code": 1100, "message": "Cannot overwrite builtin part '%s' without Save-As-New", "cause": "Attempted to overwrite builtin part", "action": "Use Save-As-New and provide a new name" },
-    { "code": 2000, "message": "Failed to read device '%s' — I/O error: %s", "cause": "Driver/connection issue", "action": "Check physical connections and drivers" },
-    { "code": 2310, "message": "Override reload failed for file '%s'", "cause": "Malformed JSON or read error", "action": "Fix JSON syntax or file permissions" }
+    {
+      "id": "INVALID_IDENTIFIER",
+      "origin": "frontend",
+      "block": "UI_VALIDATION",
+      "code": 1000,
+      "summary": "Invalid identifier",
+      "template": "Invalid identifier for %s — must match ^[A-Za-z0-9_\\-:.]+$ and be <=128 chars.",
+      "guidance": [
+        {
+          "cause": "An identifier contains disallowed characters or exceeds the maximum length.",
+          "actions": [
+            "Rename it to use only alphanumerics plus _ - : .",
+            "Keep identifiers <= 128 characters."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CANNOT_OVERWRITE_BUILTIN_PART",
+      "origin": "frontend",
+      "block": "UI_BUILD_MODE",
+      "code": 1100,
+      "summary": "Cannot overwrite builtin part",
+      "template": "Cannot overwrite builtin part '%s' without Save-As-New.",
+      "guidance": [
+        {
+          "cause": "Attempted to save a part under a builtin name without requesting Save-As-New.",
+          "actions": [
+            "Use Save-As-New and provide a unique new name.",
+            "If you intended to update a user part, confirm you selected the user part (not the builtin)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "DEVICE_READ_IO",
+      "origin": "backend",
+      "block": "BE_DEVICE_IO",
+      "code": 2000,
+      "summary": "Device read failed",
+      "template": "Failed to read device '%s' — I/O error: %s",
+      "guidance": [
+        {
+          "cause": "The device is disconnected, powered off, or the underlying driver cannot communicate (USB/ETH timeout, permissions).",
+          "actions": [
+            "Check physical connections and power.",
+            "Verify OS-level drivers/permissions and restart the backend."
+          ]
+        },
+        {
+          "cause": "The device is present but busy or wedged.",
+          "actions": [
+            "Try a device reset action (if available).",
+            "Power-cycle the device (only if safe)."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "OVERRIDE_RELOAD_FAILED",
+      "origin": "backend",
+      "block": "BE_PHYSICS_SIM",
+      "code": 2310,
+      "summary": "Override reload failed",
+      "template": "Override reload failed for file '%s'",
+      "guidance": [
+        {
+          "cause": "The override file could not be read (missing file, permissions).",
+          "actions": [
+            "Verify the file exists and the backend has read permissions.",
+            "If running in a container, confirm the volume mount/path."
+          ]
+        },
+        {
+          "cause": "The override file contains malformed JSON.",
+          "actions": [
+            "Fix JSON syntax (quotes, braces, commas).",
+            "Validate the override against the expected schema."
+          ]
+        }
+      ]
+    }
   ]
 }

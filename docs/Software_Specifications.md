@@ -494,127 +494,127 @@ This section lists the hardware-relevant specs the software uses or expects to q
 
 #### 1000-1099 — UI validation errors
 
-- Error 1000: "Error 1000: Invalid identifier for %s — must match ^[A-Za-z0-9_\-:.]+$ and be <=128 chars."
+- 1000: "Error 1000: Invalid identifier for %s — must match ^[A-Za-z0-9_\-:.]+$ and be <=128 chars."
   - Cause: User entered an ID with disallowed characters or too long.
   - Action: Edit the identifier to conform; UI highlights the offending characters.
 
-- Error 1010: "Error 1010: Numeric field '%s' out of range [%s, %s]."
+- 1010: "Error 1010: Numeric field '%s' out of range [%s, %s]."
   - Cause: Entered value outside the acceptable range for the control.
   - Action: Enter a value within the displayed min/max; consult device specs.
 
-- Error 1020: "Error 1020: Missing required field '%s'."
+- 1020: "Error 1020: Missing required field '%s'."
   - Cause: A required field was left empty.
   - Action: Fill in the missing field; UI highlights the offending step/field.
 
-- Error 1021: "Error 1021: Unknown device '%s'."
+- 1021: "Error 1021: Unknown device '%s'."
   - Cause: A macro references a device ID that is not present in the current device graph/registry.
   - Action: Update the device ID, or connect to the correct backend/device graph.
 
-- Error 1022: "Error 1022: Device '%s' is in state '%s' (must be nominal to run)."
+- 1022: "Error 1022: Device '%s' is in state '%s' (must be nominal to run)."
   - Cause: Macro attempted to run an action while a device is not in a safe/nominal state.
   - Action: Wait for devices to return to nominal or adjust safe-state steps.
 
-- Error 1023: "Error 1023: Params must be an object."
+- 1023: "Error 1023: Params must be an object."
   - Cause: Macro step params are malformed or non-JSON-object.
   - Action: Edit the step params to be a JSON object.
 
-- Error 1024: "Error 1024: Wait seconds must be >= 0."
+- 1024: "Error 1024: Wait seconds must be >= 0."
   - Cause: Negative or non-finite wait duration.
   - Action: Enter a non-negative number.
 
-- Error 1025: "Error 1025: Missing required field '%s'."
+- 1025: "Error 1025: Missing required field '%s'."
   - Cause: Condition is missing required fields (e.g., deviceId/metric).
   - Action: Fill in the missing condition fields.
 
-- Error 1026: "Error 1026: Metric '%s' not available on device '%s'."
+- 1026: "Error 1026: Metric '%s' not available on device '%s'."
   - Cause: Macro condition or record stream references a metric not present in the device descriptor.
   - Action: Choose a valid metric for the selected device.
 
-- Error 1027: "Error 1027: Timeout must be > 0."
+- 1027: "Error 1027: Timeout must be > 0."
   - Cause: Non-positive timeout for wait/loop.
   - Action: Enter a positive timeout.
 
-- Error 1028: "Error 1028: Record requires at least one stream."
+- 1028: "Error 1028: Record requires at least one stream."
   - Cause: Record block has no configured streams.
   - Action: Add at least one stream (device + rate + metrics).
 
-- Error 1029: "Error 1029: Stream %d: %s"
+- 1029: "Error 1029: Stream %d: %s"
   - Cause: Invalid record stream config (missing device, invalid rate, unsupported metric).
   - Action: Fix the stream entry; UI highlights the invalid stream.
 
-- Error 1030: "Error 1030: Invalid JSON."
+- 1030: "Error 1030: Invalid JSON."
   - Cause: User entered malformed JSON in a JSON input/prompt.
   - Action: Fix JSON syntax (quotes, braces, commas) and retry.
 
 #### 1100-1199 — Build-mode / parts browser errors
 
-- Error 1100: "Error 1100: Cannot overwrite builtin part '%s' without Save-As-New."
+- 1100: "Error 1100: Cannot overwrite builtin part '%s' without Save-As-New."
   - Cause: Attempt to save a modified part with an existing builtin name without `save_as_new`.
   - Action: Use Save-As-New and supply a new unique name.
 
-- Error 1190: "Error 1190: Feature not implemented: %s."
+- 1190: "Error 1190: Feature not implemented: %s."
   - Cause: The UI path is present but the feature is not yet implemented.
   - Action: Use an alternative workflow or update to a version where the feature is implemented.
 
 #### 2000-2199 — Device read & status errors
 
-- Error 2000: "Error 2000: Failed to read device '%s' — I/O error: %s".
+- 2000: "Error 2000: Failed to read device '%s' — I/O error: %s".
   - Cause: Driver failed to communicate (USB/ETH timeouts, disconnected device).
   - Action: Check connections, restart device, check OS-level device drivers.
 
-- Error 2010: "Error 2010: Device '%s' measurement out of expected range: %s +/- %s".
+- 2010: "Error 2010: Device '%s' measurement out of expected range: %s +/- %s".
   - Cause: Sensor reporting values outside configured ranges.
   - Action: Verify sensor calibration, check ambient conditions, consider setting a wider tolerance or zeroing device.
 
-- Error 2020: "Error 2020: Device '%s' not responding for %d seconds".
+- 2020: "Error 2020: Device '%s' not responding for %d seconds".
   - Cause: Driver busy, process stuck, or hardware fault.
   - Action: Attempt device reset (`Perform Action -> reset`), power-cycle hardware if safe.
 
 #### 2200-2299 — Parts library / overrides errors
 
-- Error 2200: "Error 2200: Parts library load failed: %s".
+- 2200: "Error 2200: Parts library load failed: %s".
   - Cause: Missing or invalid `PartsLibrary.json`.
   - Action: Restore the file from repository, or use the API to re-upload/repair.
 
-- Error 2210: "Error 2210: Failed to save user part '%s': %s".
+- 2210: "Error 2210: Failed to save user part '%s': %s".
   - Cause: File write permissions, malformed part spec.
   - Action: Ensure server has write permissions to `shared/protocol/user_parts.json`; validate JSON schema.
 
-- Error 2220: "Error 2220: Device override '%s' invalid: %s".
+- 2220: "Error 2220: Device override '%s' invalid: %s".
   - Cause: Override JSON fails schema validation.
   - Action: Review the override JSON; use the UI JSON editor which validates before save.
 
 #### 2300-2399 — PhysicsEngine & simulation errors
 
-- Error 2300: "Error 2300: PhysicsEngine compute failure: %s".
+- 2300: "Error 2300: PhysicsEngine compute failure: %s".
   - Cause: Unexpected exception during compute (bad numeric values, malformed specs).
   - Action: Inspect logs, check parts/overrides for NaN/invalid numbers.
 
-- Error 2310: "Error 2310: Override reload failed for file '%s'".
+- 2310: "Error 2310: Override reload failed for file '%s'".
   - Cause: File read error, malformed JSON.
   - Action: Use `/api/device_overrides/reload` to re-touch and check server logs; fix JSON syntax.
 
-- Error 2320: "Error 2320: Incompatible unit conversion for device '%s' property '%s'".
+- 2320: "Error 2320: Incompatible unit conversion for device '%s' property '%s'".
   - Cause: Mismatch between parts library unit and device property unit.
   - Action: Ensure `ComponentSchema.json` and parts specify consistent units; apply conversions.
 
 #### 2400-2499 — WebSocket / control channel errors
 
-- Error 2400: "Error 2400: Control message rejected: %s".
+- 2400: "Error 2400: Control message rejected: %s".
   - Cause: Malformed control message or unsupported action.
   - Action: Verify control message format matches DescriptorProtocol (see protocol docs).
 
-- Error 2410: "Error 2410: WebSocket session dropped unexpectedly".
+- 2410: "Error 2410: WebSocket session dropped unexpectedly".
   - Cause: Network interruption, client closed socket.
   - Action: Reconnect client; check server socket limits.
 
 #### 3000-3199 — QEC service errors
 
-- Error 3000: "Error 3000: QEC submit failed — bad request: %s".
+- 3000: "Error 3000: QEC submit failed — bad request: %s".
   - Cause: Submitted measurement payload missing required fields.
   - Action: Validate request against `QECRequest.json` schema and re-submit.
 
-- Error 3100: "Error 3100: QEC job %s failed during decoding: %s".
+- 3100: "Error 3100: QEC job %s failed during decoding: %s".
   - Cause: Decoder exception or out-of-resources.
   - Action: Retry with smaller batch or check QEC backend logs.
 

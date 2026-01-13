@@ -12,7 +12,11 @@ nlohmann::json AncillaQubitDevice::descriptor() const {
         {"type", "ancilla_qubit"},
         {"role", role},
         {"status", "ok"},
-        {"specs", { {"max_sampling_rate_hz", 50.0} }},
+        {"specs", {
+            {"max_sampling_rate_hz", 50.0},
+            {"manufacturer", "Stone Labs: Spintronix Division"},
+            {"datasheet_url", "https://example.com/AncillaQubit"}
+        }},
         {"metrics", {
             {"state", { {"kind", "integer"}, {"unit", "bit"}, {"backend_unit", "bit"}, {"min", 0.0}, {"max", 1.0} }},
             {"role", { {"kind", "string"} }}
