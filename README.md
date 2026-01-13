@@ -5,15 +5,14 @@ Consult the `scripts/README.md` and consider using the `scripts/setup_and_launch
 
 **Goals:**  
 
-- [ ] Provide a working, well-structured skeleton codebase that implements subsystems for controlling quantum architecture:
-  - [ ] Backend [`c++`]: diagnostics, results, reception, demo/simulator, state cache;
-  - [ ] Frontend [`vite/React`]: transmission and reception of instructions for backend
+- [x] Provide a working, well-structured skeleton codebase that implements subsystems for controlling quantum architecture:
+  - [x] Backend [`c++`]: diagnostics, results, reception, demo/simulator, state cache;
+  - [x] Frontend [`vite/React`]: transmission and reception of instructions for backend
         determined from user interactions, diagnostics UI, display of apparatus components in an editable schematic.
-  - [ ] Quantum Error Correction (QEC) API - utilize system state to better apply appropriate
+  - [x] Quantum Error Correction (QEC) API - utilize system state to better apply appropriate
         error corrections and interpret commands from script interface for executing quantum computations.
-- [ ] Code focuses on clarity, separation of concerns, testability,
-      and places to plug real drivers / hardware SDKs / error-correction libraries.
-- [ ] Demonstrate to companies that _"I can 'river-dance' with the best of 'them'."_
+- [x] Provide users with ability to customize as much as possible.
+- [ ] Demonstrate to potential employers _"I can 'river-dance' with the best of 'them'."_
 
 ## Prerequisites
 
